@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: person-postgres
+    environment:
+      POSTGRES_DB: persondb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  person-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: person-service
+    ports:
+      - "8080:8080"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: persondb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      JWT_ISSUER_URI: https://auth.example.com
+      JWT_JWK_SET_URI: https://auth.example.com/.well-known/jwks.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  postgres-data:

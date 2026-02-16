@@ -1,0 +1,39 @@
+version: 2.1
+
+orbs:
+  maven: circleci/maven@1.4.0
+
+jobs:
+  build:
+    docker:
+      - image: cimg/openjdk:17.0.10
+    steps:
+      - checkout
+      - run:
+          name: Build with Maven
+          command: mvn clean package -DskipTests
+      - save_cache:
+          key: v1-dependencies-{{ checksum "pom.xml" }}
+          paths:
+            - ~/.m2
+      - store_artifacts:
+          path: target/*.jar
+
+  test:
+    docker:
+      - image: cimg/openjdk:17.0.10
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-dependencies-{{ checksum "pom.xml" }}
+      - run:
+          name: Run tests
+          command: mvn test
+
+workflows:
+  build-and-test:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
