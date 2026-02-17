@@ -1,0 +1,13 @@
+apiVersion: skaffold/v4beta6
+kind: Config
+metadata:
+  name: claude-ai-spring-boot
+build:
+  artifacts:
+    - image: claude-ai-spring-boot
+      context: .
+deploy:
+  kubectl:
+    manifests:
+      - k8s/deployment.yaml
+      - k8s/service.yaml

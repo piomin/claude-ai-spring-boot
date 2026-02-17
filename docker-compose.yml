@@ -1,0 +1,41 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: claudeai
+      POSTGRES_USER: claude
+      POSTGRES_PASSWORD: claude
+    ports:
+      - "5432:5432"
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.4
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+    depends_on:
+      - postgres
+    ports:
+      - "8081:8080"
+  app:
+    build: .
+    depends_on:
+      - postgres
+      - keycloak
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/claudeai
+      SPRING_DATASOURCE_USERNAME: claude
+      SPRING_DATASOURCE_PASSWORD: claude
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/claude
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_AUDIENCE: pl.piomin.services
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
