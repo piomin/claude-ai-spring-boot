@@ -1,0 +1,34 @@
+version: 2.1
+
+orbs:
+  maven: circleci/maven@1.2.0
+
+jobs:
+  build-and-test:
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - run:
+          name: Install OpenJDK 17
+          command: |
+            sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+            sudo update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+      - run:
+          name: Build and test
+          command: |
+            mvn clean compile
+            mvn test
+      - run:
+          name: Package application
+          command: |
+            mvn package -DskipTests
+      - store_test_results:
+          path: target/surefire-reports
+      - store_artifacts:
+          path: target/claude-ai-spring-boot-1.0.1.jar
+
+workflows:
+  version: 2
+  build-test-deploy:
+    jobs:
+      - build-and-test

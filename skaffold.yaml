@@ -1,0 +1,25 @@
+apiVersion: skaffold/v2beta4
+kind: Config
+metadata:
+  name: spring-boot-app
+build:
+  artifacts:
+  - image: spring-boot-app
+    context: .
+    docker:
+      dockerfile: Dockerfile
+  local:
+    push: false
+deploy:
+  kubectl:
+    manifests:
+    - kubernetes/deployment.yaml
+    - kubernetes/service.yaml
+    - kubernetes/ingress.yaml
+profiles:
+- name: dev
+  activation:
+  - kubeContext: minikube
+  build:
+    local:
+      push: false
