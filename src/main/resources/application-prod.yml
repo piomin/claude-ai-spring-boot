@@ -1,0 +1,9 @@
+spring:
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    pl.piomin.services: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN

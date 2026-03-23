@@ -1,0 +1,98 @@
+version: 2.1
+
+orbs:
+  maven: circleci/maven@1.4.1
+  docker: circleci/docker@2.2.0
+
+executors:
+  java-executor:
+    docker:
+      - image: cimg/openjdk:21.0
+    environment:
+      MAVEN_OPTS: -Xmx3200m
+    resource_class: medium
+
+jobs:
+  build-and-test:
+    executor: java-executor
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - maven-deps-v1-{{ checksum "pom.xml" }}
+            - maven-deps-v1-
+      - run:
+          name: Build and Run Tests
+          command: |
+            mvn clean verify
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: maven-deps-v1-{{ checksum "pom.xml" }}
+      - run:
+          name: Generate Coverage Report
+          command: mvn jacoco:report
+      - store_test_results:
+          path: target/surefire-reports
+      - store_artifacts:
+          path: target/site/jacoco
+          destination: coverage-report
+      - store_artifacts:
+          path: target/surefire-reports
+          destination: test-reports
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/*.jar
+            - pom.xml
+
+  security-scan:
+    executor: java-executor
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - maven-deps-v1-{{ checksum "pom.xml" }}
+      - run:
+          name: OWASP Dependency Check
+          command: |
+            mvn org.owasp:dependency-check-maven:check
+      - store_artifacts:
+          path: target/dependency-check-report.html
+          destination: security-report
+
+  docker-build:
+    executor: docker/docker
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 20.10.18
+      - attach_workspace:
+          at: .
+      - run:
+          name: Build Docker Image
+          command: |
+            docker build -t ${CIRCLE_PROJECT_USERNAME}/claude-ai-spring-boot:${CIRCLE_SHA1} .
+            docker tag ${CIRCLE_PROJECT_USERNAME}/claude-ai-spring-boot:${CIRCLE_SHA1} ${CIRCLE_PROJECT_USERNAME}/claude-ai-spring-boot:latest
+      - run:
+          name: Push Docker Image
+          command: |
+            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+            docker push ${CIRCLE_PROJECT_USERNAME}/claude-ai-spring-boot:${CIRCLE_SHA1}
+            docker push ${CIRCLE_PROJECT_USERNAME}/claude-ai-spring-boot:latest
+
+workflows:
+  build-test-deploy:
+    jobs:
+      - build-and-test
+      - security-scan:
+          requires:
+            - build-and-test
+      - docker-build:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: main
+          context:
+            - docker-hub

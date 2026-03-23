@@ -1,0 +1,8 @@
+spring:
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    pl.piomin.services: DEBUG
+    org.springframework.security: TRACE

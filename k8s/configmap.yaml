@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  labels:
+    app: claude-ai-spring-boot
+data:
+  database.url: jdbc:postgresql://postgres-service:5432/persondb
+  spring.profiles.active: prod

@@ -1,0 +1,28 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: claude-ai-spring-boot
+
+build:
+  artifacts:
+    - image: claude-ai-spring-boot
+      docker:
+        dockerfile: Dockerfile
+  local:
+    push: false
+
+deploy:
+  kubectl:
+    manifests:
+      - k8s/configmap.yaml
+      - k8s/secret.yaml
+      - k8s/postgres-deployment.yaml
+      - k8s/postgres-service.yaml
+      - k8s/deployment.yaml
+      - k8s/service.yaml
+
+portForward:
+  - resourceType: service
+    resourceName: claude-ai-spring-boot
+    port: 8080
+    localPort: 8080

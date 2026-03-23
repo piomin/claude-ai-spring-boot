@@ -12,7 +12,8 @@
       "Bash(docker-compose up:*)",
       "Bash(docker ps:*)",
       "Bash(docker exec:*)",
-      "Bash(docker-compose down:*)"
+      "Bash(docker-compose down:*)",
+      "Bash(find . -type f \\\\\\(-name *.java -o -name *.xml -o -name *.yaml -o -name *.yml \\\\\\))"
     ]
   }
 }
