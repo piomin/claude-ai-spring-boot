@@ -22,6 +22,7 @@ Quick reference for common design patterns in Java.
 | Add behavior without changing class | **Decorator** | Dynamic composition needed |
 | Notify multiple objects of changes | **Observer** | One-to-many dependency |
 | Convert incompatible interfaces | **Adapter** | Integrate legacy/3rd party code |
+| Orchestrate services, assemble DTOs | **Facade** | Controller → Facade → Services |
 
 ---
 
@@ -239,6 +240,75 @@ coffee = new MilkDecorator(coffee);
 coffee = new SugarDecorator(coffee);
 ```
 
+### Facade (Spring Boot — mandatory pattern)
+**Problem:** Controllers bloated with orchestration logic; services coupled to HTTP concerns
+
+**Rule:** Controller → Facade → Service(s). Always.
+
+```java
+// ✅ Dumb controller — parses request, delegates, returns response
+@RestController
+@RequestMapping("/orders")
+@RequiredArgsConstructor
+public class OrderController {
+
+    private final OrderFacade orderFacade;
+
+    @GetMapping("/{id}")
+    public ResponseEntity<OrderDTO> getOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(orderFacade.getOrder(id));
+    }
+}
+
+// ✅ Facade — orchestrates services, assembles DTO
+@Component
+@RequiredArgsConstructor
+public class OrderFacade {
+
+    private final OrderService orderService;
+    private final CustomerService customerService;
+    private final ProductService productService;
+
+    public OrderDTO getOrder(Long orderId) {
+        Order order = orderService.findById(orderId);
+        Customer customer = customerService.findById(order.getCustomerId());
+        List<Product> products = productService.findByIds(order.getProductIds());
+        return OrderDTO.from(order, customer, products);
+    }
+}
+
+// ✅ Service — single-responsibility domain logic, no DTOs
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private final OrderRepository orderRepository;
+
+    public Order findById(Long id) {
+        return orderRepository.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Order not found: " + id));
+    }
+}
+```
+
+**Package layout:**
+```
+com.active.dot.
+├── controller/   ← HTTP only, calls facade
+├── facade/       ← orchestration, DTO assembly
+├── service/      ← domain logic
+├── repository/   ← data access
+└── dto/          ← response/request shapes
+```
+
+**What belongs where:**
+
+| Layer | Responsibilities | Never |
+|-------|-----------------|-------|
+| Controller | Parse request, call facade, return HTTP response | Business logic, service calls |
+| Facade | Call multiple services, map to DTO, decorate | DB access, HTTP details |
+| Service | Domain rules, single aggregate | DTOs, HTTP concerns |
+
 ### Adapter
 **Problem:** Make incompatible interfaces work together
 
@@ -279,6 +349,7 @@ player.play("song.mp3");
 | Multiple implementations of algorithm | Strategy |
 | React to state changes | Observer |
 | Integrate with legacy code | Adapter |
+| Controller needs data from multiple services | **Facade** (mandatory) |
 
 ## Anti-Patterns to Avoid
 

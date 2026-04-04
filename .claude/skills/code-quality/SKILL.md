@@ -176,7 +176,9 @@ String name = Optional.ofNullable(user.getName())
     .orElse("");
 
 // ✅ Safe with early return
-if (user.getName() == null) return "";
+if (user.getName() == null){
+        return "";
+        }
 return user.getName().toUpperCase();
 ```
 
