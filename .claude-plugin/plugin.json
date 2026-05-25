@@ -1,12 +1,12 @@
 {
   "name": "spring-boot-plugin",
-  "description": "Complete Spring Boot development template with agents, skills, and best practices for enterprise Java applications. Includes JPA patterns, code quality checks, and Spring Boot 3.x support.",
-  "version": "1.0.0",
+  "description": "Complete Spring Boot development template with agents, skills, and best practices for enterprise Java applications. Includes Spring Boot 4.x (3.x compatible) guidance, JPA and MongoDB data patterns, and code quality checks.",
+  "version": "1.1.0",
   "author": {
     "name": "Piotr Mińkowski"
   },
   "repository": "https://github.com/piomin/claude-ai-spring-boot",
   "homepage": "https://piotrminkowski.com/2026/03/24/claude-code-template-for-spring-boot/",
-  "keywords": ["spring-boot", "java", "maven", "enterprise", "jpa", "testing", "spring"],
+  "keywords": ["spring-boot", "spring-boot-4", "java", "maven", "enterprise", "jpa", "mongodb", "testing", "spring"],
   "license": "Apache-2.0"
 }

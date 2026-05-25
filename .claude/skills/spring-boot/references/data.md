@@ -1,5 +1,12 @@
 # Data Access - Spring Data JPA
 
+> Covers relational/JPA access. For document databases see `references/mongodb.md`.
+> Spring Boot 4.x ships **Hibernate 7.1** and Spring Data 2025.1; the patterns below are
+> unchanged from 3.x, but verify generated DDL when upgrading (Hibernate 7 tightens some
+> defaults). Use JSpecify `@Nullable` (`org.jspecify.annotations`) rather than Spring's on 4.x.
+> Entities below use explicit accessors; Lombok `@Getter/@Setter` is a fine substitute — but
+> never `@Data` on an entity (see the spring-boot skill's "Boilerplate" section).
+
 ## JPA Entity Pattern
 
 ```java
@@ -211,10 +218,9 @@ public class OrderService {
     @Transactional
     public Order createOrder(OrderCreateRequest request) {
         // All operations in single transaction
-        Order order = Order.builder()
-            .customerId(request.customerId())
-            .status(OrderStatus.PENDING)
-            .build();
+        Order order = new Order();
+        order.setCustomerId(request.customerId());
+        order.setStatus(OrderStatus.PENDING);
 
         request.items().forEach(item -> {
             inventoryService.reserveStock(item.productId(), item.quantity());
@@ -284,7 +290,6 @@ public class JpaAuditingConfig {
 
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
-@Getter @Setter
 public abstract class AuditableEntity {
 
     @CreatedDate
@@ -302,6 +307,16 @@ public abstract class AuditableEntity {
     @LastModifiedBy
     @Column(nullable = false, length = 100)
     private String updatedBy;
+
+    // Getters and setters (no Lombok)
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public String getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 }
 ```
 
@@ -339,36 +354,25 @@ List<UserSummaryDto> dtos = userRepository.findAllBy(UserSummaryDto.class);
 
 ## Query Optimization
 
-```java
-@Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
-public class UserQueryService {
-    private final UserRepository userRepository;
-    private final EntityManager entityManager;
+Fetching strategies belong on the **repository**; the service composes the results. Putting
+`@Query`/`@EntityGraph` on a `@Service` does nothing — they are only honored on repository
+methods.
 
-    // N+1 problem solved with JOIN FETCH
+```java
+public interface UserRepository extends JpaRepository<User, Long> {
+
+    // N+1 solved with JOIN FETCH (DISTINCT avoids duplicate rows from collection joins)
     @Query("SELECT DISTINCT u FROM User u " +
            "LEFT JOIN FETCH u.addresses " +
            "LEFT JOIN FETCH u.roles " +
            "WHERE u.active = true")
     List<User> findAllActiveWithAssociations();
 
-    // Batch fetching
-    @BatchSize(size = 25)
-    @OneToMany(mappedBy = "user")
-    private List<Order> orders;
-
-    // EntityGraph for dynamic fetching
+    // EntityGraph for declarative fetching on a derived query
     @EntityGraph(attributePaths = {"addresses", "roles"})
     List<User> findAllByActiveTrue();
 
-    // Pagination to avoid loading all data
-    public Page<User> findAllUsers(Pageable pageable) {
-        return userRepository.findAll(pageable);
-    }
-
-    // Native query for complex queries
+    // Native query for complex aggregation
     @Query(value = """
         SELECT u.* FROM users u
         INNER JOIN orders o ON u.id = o.user_id
@@ -379,6 +383,29 @@ public class UserQueryService {
     List<User> findFrequentBuyers(@Param("since") LocalDateTime since,
                                   @Param("minOrders") int minOrders);
 }
+
+@Service
+@Transactional(readOnly = true)
+public class UserQueryService {
+    private final UserRepository userRepository;
+
+    public UserQueryService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    // Pagination keeps result sets bounded
+    public Page<User> findAllUsers(Pageable pageable) {
+        return userRepository.findAll(pageable);
+    }
+}
+```
+
+Batch fetching is configured on the entity association itself, not the repository:
+
+```java
+@OneToMany(mappedBy = "user")
+@BatchSize(size = 25)  // Hibernate loads pending associations 25 at a time
+private List<Order> orders;
 ```
 
 ## Database Migrations (Flyway)

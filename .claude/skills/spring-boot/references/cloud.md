@@ -211,6 +211,12 @@ spring:
 
 ## Circuit Breaker - Resilience4j
 
+> **Spring Boot 4.x:** for plain **retry** and **concurrency limiting**, prefer the built-in
+> `@Retryable` / `@ConcurrencyLimit` annotations (`spring-context`, enabled with
+> `@EnableResilientMethods`) — no extra dependency. Keep **Resilience4j** when you need a true
+> circuit breaker, bulkhead, or rate limiter, which Spring core does not yet provide. See the
+> spring-boot skill's "Spring Boot 4 Features" section for the built-in annotations.
+
 ```java
 @Service
 public class ExternalApiService {
@@ -286,10 +292,14 @@ logging:
 
 // Custom spans
 @Service
-@RequiredArgsConstructor
 public class OrderService {
     private final Tracer tracer;
     private final OrderRepository orderRepository;
+
+    public OrderService(Tracer tracer, OrderRepository orderRepository) {
+        this.tracer = tracer;
+        this.orderRepository = orderRepository;
+    }
 
     public Order processOrder(OrderRequest request) {
         Span span = tracer.nextSpan().name("processOrder").start();
