@@ -1,5 +1,10 @@
 # Testing - Spring Boot Test
 
+> **Spring Boot 4.x:** `@MockBean` and `@SpyBean` were **removed**. Use `@MockitoBean` and
+> `@MockitoSpyBean` from `org.springframework.test.context.bean.override.mockito` (deprecated
+> since 3.4, gone in 4.x). Examples below use the 4.x annotations. Testcontainers connections
+> use `@ServiceConnection` instead of manual `@DynamicPropertySource` wiring.
+
 ## Unit Testing with JUnit 5
 
 ```java
@@ -152,7 +157,7 @@ class UserControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private UserService userService;
 
     @Autowired
@@ -244,12 +249,11 @@ class UserRepositoryTest {
     @DisplayName("Should find user by email")
     void shouldFindUserByEmail() {
         // Given
-        User user = User.builder()
-            .email("test@example.com")
-            .password("password")
-            .username("testuser")
-            .active(true)
-            .build();
+        User user = new User();
+        user.setEmail("test@example.com");
+        user.setPassword("password");
+        user.setUsername("testuser");
+        user.setActive(true);
 
         entityManager.persistAndFlush(user);
 
@@ -265,12 +269,11 @@ class UserRepositoryTest {
     @DisplayName("Should check if email exists")
     void shouldCheckIfEmailExists() {
         // Given
-        User user = User.builder()
-            .email("test@example.com")
-            .password("password")
-            .username("testuser")
-            .active(true)
-            .build();
+        User user = new User();
+        user.setEmail("test@example.com");
+        user.setPassword("password");
+        user.setUsername("testuser");
+        user.setActive(true);
 
         entityManager.persistAndFlush(user);
 
@@ -285,16 +288,16 @@ class UserRepositoryTest {
     @DisplayName("Should fetch user with roles")
     void shouldFetchUserWithRoles() {
         // Given
-        Role adminRole = Role.builder().name("ADMIN").build();
+        Role adminRole = new Role();
+        adminRole.setName("ADMIN");
         entityManager.persist(adminRole);
 
-        User user = User.builder()
-            .email("admin@example.com")
-            .password("password")
-            .username("admin")
-            .active(true)
-            .roles(Set.of(adminRole))
-            .build();
+        User user = new User();
+        user.setEmail("admin@example.com");
+        user.setPassword("password");
+        user.setUsername("admin");
+        user.setActive(true);
+        user.setRoles(Set.of(adminRole));
 
         entityManager.persistAndFlush(user);
         entityManager.clear();
@@ -319,17 +322,15 @@ class UserRepositoryTest {
 class UserServiceIntegrationTest {
 
     @Container
+    @ServiceConnection                 // wires datasource URL/credentials automatically
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
         .withDatabaseName("testdb")
         .withUsername("test")
         .withPassword("test");
 
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-    }
+    // For properties @ServiceConnection doesn't cover, fall back to @DynamicPropertySource:
+    // @DynamicPropertySource
+    // static void props(DynamicPropertyRegistry registry) { registry.add(...); }
 
     @Autowired
     private UserService userService;
@@ -373,7 +374,7 @@ class UserReactiveControllerTest {
     @Autowired
     private WebTestClient webTestClient;
 
-    @MockBean
+    @MockitoBean
     private UserReactiveService userService;
 
     @Test
@@ -496,14 +497,14 @@ public class TestConfig {
 public class TestDataFactory {
 
     public static User createUser(String email, String username) {
-        return User.builder()
-            .email(email)
-            .password("encodedPassword")
-            .username(username)
-            .active(true)
-            .createdAt(LocalDateTime.now())
-            .updatedAt(LocalDateTime.now())
-            .build();
+        User user = new User();
+        user.setEmail(email);
+        user.setPassword("encodedPassword");
+        user.setUsername(username);
+        user.setActive(true);
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        return user;
     }
 
     public static UserCreateRequest createUserRequest() {
@@ -525,9 +526,12 @@ public class TestDataFactory {
 | `@WebMvcTest` | Test MVC controllers with mocked services |
 | `@WebFluxTest` | Test reactive controllers |
 | `@DataJpaTest` | Test JPA repositories with in-memory database |
-| `@MockBean` | Add mock bean to Spring context |
+| `@DataMongoTest` | Test MongoDB repositories/`MongoTemplate` slice |
+| `@MockitoBean` | Add a Mockito mock bean to the context (4.x; replaces `@MockBean`) |
+| `@MockitoSpyBean` | Wrap a context bean in a Mockito spy (4.x; replaces `@SpyBean`) |
 | `@WithMockUser` | Mock authenticated user for security tests |
 | `@Testcontainers` | Enable Testcontainers support |
+| `@ServiceConnection` | Auto-wire a container's connection details into the context |
 | `@ActiveProfiles` | Activate specific Spring profiles for test |
 
 ## Testing Best Practices

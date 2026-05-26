@@ -1,4 +1,11 @@
-# Security - Spring Security 6
+# Security - Spring Security 6 / 7
+
+> **Spring Boot 4.x ships Spring Security 7.** The lambda DSL shown below is the only supported
+> style — the pre-lambda overloads (e.g. `authorizeHttpRequests()` without a lambda) were
+> removed. `SecurityFilterChain` + `@EnableWebSecurity`/`@EnableMethodSecurity` remain the entry
+> point, so these examples work unchanged on 7. When upgrading, run the OpenRewrite Security 7
+> recipe and check for relocated classes. The `@AuthenticationPrincipal` and method-security
+> annotations are unchanged.
 
 ## Security Configuration
 
@@ -169,13 +176,12 @@ public class JwtService {
             Map<String, Object> extraClaims,
             UserDetails userDetails,
             long expiration) {
-        return Jwts
-            .builder()
-            .setClaims(extraClaims)
-            .setSubject(userDetails.getUsername())
-            .setIssuedAt(new Date(System.currentTimeMillis()))
-            .setExpiration(new Date(System.currentTimeMillis() + expiration))
-            .signWith(getSignInKey(), SignatureAlgorithm.HS256)
+        return Jwts.builder()
+            .claims(extraClaims)
+            .subject(userDetails.getUsername())
+            .issuedAt(new Date(System.currentTimeMillis()))
+            .expiration(new Date(System.currentTimeMillis() + expiration))
+            .signWith(getSignInKey())          // algorithm inferred from the key (jjwt 0.12+)
             .compact();
     }
 
@@ -193,15 +199,14 @@ public class JwtService {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts
-            .parserBuilder()
-            .setSigningKey(getSignInKey())
+        return Jwts.parser()
+            .verifyWith(getSignInKey())
             .build()
-            .parseClaimsJws(token)
-            .getBody();
+            .parseSignedClaims(token)
+            .getPayload();
     }
 
-    private Key getSignInKey() {
+    private SecretKey getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
     }
@@ -378,9 +383,12 @@ public class AuthenticationService {
 
 ```java
 @Service
-@RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     @PreAuthorize("hasRole('ADMIN')")
     public List<User> getAllUsers() {

@@ -1,5 +1,9 @@
 # Web Layer - Controllers & REST APIs
 
+> Controller, validation, and exception-handling patterns below are version-neutral. The
+> "Spring Boot 4 Web Features" section near the end covers native API versioning and declarative
+> HTTP clients (4.x / Spring Framework 7 only).
+
 ## REST Controller Pattern
 
 ```java
@@ -117,8 +121,8 @@ public record UserResponse(
 
 ```java
 @RestControllerAdvice
-@Slf4j
 public class GlobalExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
@@ -289,10 +293,80 @@ public class WebConfig implements WebMvcConfigurer {
 }
 ```
 
+## Spring Boot 4 Web Features
+
+> Spring Boot 4.x / Spring Framework 7.x only.
+
+### Native API Versioning
+
+Versioning is part of the MVC/WebFlux routing model — no custom `RequestCondition` needed.
+
+```java
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+
+    @GetMapping(value = "/{id}", version = "1.0")
+    public UserV1 getV1(@PathVariable Long id) { /* ... */ }
+
+    @GetMapping(value = "/{id}", version = "2.0")   // matched only for v2 requests
+    public UserV2 getV2(@PathVariable Long id) { /* ... */ }
+}
+
+@Configuration
+public class ApiVersionConfig implements WebMvcConfigurer {
+    @Override
+    public void configureApiVersioning(ApiVersionConfigurer configurer) {
+        configurer
+            .useRequestHeader("X-API-Version")        // header strategy
+            .setVersionRequired(false)                // fall back to the default version
+            .setDefaultVersion("1.0");
+        // Alternatives: usePathSegment(int), useQueryParam("version"),
+        //               useMediaTypeParameter(MediaType.APPLICATION_JSON, "version")
+    }
+}
+```
+
+### Declarative HTTP Service Clients
+
+Feign-style interface clients are native in 4.x. Annotate an interface; Boot generates and
+registers the proxy.
+
+```java
+@HttpExchange(url = "/orders", accept = "application/json")
+public interface OrderClient {
+    @GetExchange("/{id}")
+    OrderResponse getById(@PathVariable Long id);
+
+    @PostExchange
+    OrderResponse create(@RequestBody CreateOrderRequest request);
+}
+
+@Configuration(proxyBeanMethods = false)
+@ImportHttpServices(group = "orders", types = OrderClient.class)
+public class HttpClientsConfig {
+
+    // Configure the shared RestClient builder for the "orders" group
+    @Bean
+    RestClientHttpServiceGroupConfigurer ordersConfigurer() {
+        return groups -> groups.filterByName("orders")
+            .forEachClient((group, builder) -> builder
+                .baseUrl("https://api.example.com")
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE));
+    }
+}
+```
+
+Inject `OrderClient` like any other bean. For reactive apps, back the group with a `WebClient`
+builder via `WebClientHttpServiceGroupConfigurer` instead.
+
 ## Quick Reference
 
 | Annotation | Purpose |
 |------------|---------|
+| `@GetMapping(version = "...")` | Route by API version (Spring Boot 4.x) |
+| `@HttpExchange`/`@GetExchange` | Declarative HTTP service client interface (4.x) |
+| `@ImportHttpServices` | Register HTTP client proxies as beans (4.x) |
 | `@RestController` | Marks class as REST controller (combines @Controller + @ResponseBody) |
 | `@RequestMapping` | Maps HTTP requests to handler methods |
 | `@GetMapping/@PostMapping` | HTTP method-specific mappings |
