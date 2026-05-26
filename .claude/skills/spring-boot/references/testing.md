@@ -322,17 +322,15 @@ class UserRepositoryTest {
 class UserServiceIntegrationTest {
 
     @Container
+    @ServiceConnection                 // wires datasource URL/credentials automatically
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
         .withDatabaseName("testdb")
         .withUsername("test")
         .withPassword("test");
 
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-    }
+    // For properties @ServiceConnection doesn't cover, fall back to @DynamicPropertySource:
+    // @DynamicPropertySource
+    // static void props(DynamicPropertyRegistry registry) { registry.add(...); }
 
     @Autowired
     private UserService userService;

@@ -13,6 +13,7 @@ Each skill folder contains:
 ## Available Skills
 
 ### Framework & Data
+
 | Skill | Description |
 |-------|-------------|
 | [spring-boot](spring-boot/) | Spring Boot 4.x (3.x compatible) - REST, JPA, MongoDB, Security, Testing, Cloud |
@@ -21,6 +22,7 @@ Each skill folder contains:
 | [logging-patterns](logging-patterns/) | Structured logging (JSON), SLF4J, MDC, AI-friendly formats |
 
 ### Code Quality & Design
+
 | Skill | Description |
 |-------|-------------|
 | [code-quality](code-quality/) | Clean-code review: API contracts, null safety, exception handling, performance |
