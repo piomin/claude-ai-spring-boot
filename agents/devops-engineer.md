@@ -45,10 +45,19 @@ version: 2.1
 
 jobs:
   build-and-test:
-    docker:
-      - image: cimg/openjdk:21.0
+    # machine executor: Testcontainers needs a local Docker daemon
+    # (with setup_remote_docker, container ports are not reachable from the job)
+    machine:
+      image: ubuntu-2404:current
     steps:
       - checkout
+      - run:
+          name: Install JDK 21
+          command: |
+            sudo apt-get update && sudo apt-get install -y openjdk-21-jdk-headless
+            echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> "$BASH_ENV"
+            echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> "$BASH_ENV"
+      - run: java -version
       - restore_cache:
           keys:
             - maven-{{ checksum "pom.xml" }}
