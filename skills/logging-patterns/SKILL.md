@@ -296,7 +296,57 @@ log.error("Payment failed: " + e.getMessage());
 
 // ❌ BAD: Exception in placeholder (toString only)
 log.error("Payment failed for order {}: {}", order.getId(), e);
+
+// ❌ BAD: No context - useless when reading logs later
+log.error("Error occurred", e);
+
+// ✅ GOOD: Key-value pairs become separate JSON fields (SLF4J 2 fluent API)
+log.atError()
+    .addKeyValue("orderId", orderId)
+    .addKeyValue("step", "payment")
+    .setCause(e)
+    .log("Order processing failed");
 ```
+
+### Log Once, at the Boundary
+
+```java
+// ❌ BAD: Log-and-rethrow - the same stack trace appears once per layer
+try {
+    paymentClient.charge(order);
+} catch (PaymentException e) {
+    log.error("Payment failed", e);
+    throw e;
+}
+
+// ✅ GOOD: Wrap with context and rethrow, no log
+try {
+    paymentClient.charge(order);
+} catch (PaymentException e) {
+    throw new OrderProcessingException("Payment failed for order " + order.id(), e);
+}
+```
+
+The `@RestControllerAdvice` handler (or message listener / scheduled job) that ends the flow logs the exception once. Expected business errors (404, validation) are `WARN` or `DEBUG` without stack trace; only unexpected failures are `ERROR` with the throwable.
+
+### What NOT to Log
+
+```java
+// ❌ NEVER
+log.info("Login user={} password={}", username, password);  // credentials
+log.debug("Calling API with token {}", jwt);                 // tokens, API keys, session IDs
+log.info("Payment card={}", cardNumber);                     // full card number / CVV
+log.info("Created customer {}", customer);                   // toString() may dump email, address, IBAN
+
+// ✅ Identify, don't expose
+log.info("Login attempted userId={}", userId);
+log.info("Payment authorised cardLast4={}", last4);
+log.info("Created customer customerId={}", customer.id());
+```
+
+- Sensitive: passwords, secrets, tokens, `Authorization`/`Cookie` headers, card data, national IDs, health data, PII (email, phone, address, birth date)
+- Records print every component in `toString()` - log the ID or override `toString()` for records carrying PII
+- Don't log full request/response bodies in production
 
 ### Log Levels Guide
 
@@ -387,6 +437,8 @@ public class AsyncConfig {
 }
 ```
 
+The decorator only applies to Spring-managed executors (`@Async`, injected `ThreadPoolTaskExecutor`). `CompletableFuture.supplyAsync(...)` without an executor runs on the common pool and loses MDC - always pass the Spring executor.
+
 ---
 
 ## Quick Reference
@@ -398,5 +450,6 @@ public class AsyncConfig {
 | `log.error("msg {}", var, exception)` | Log with stack trace |
 | `MDC.put("key", "value")` | Add context to all logs in thread |
 | `MDC.clear()` | Clean up in `finally` block |
+| `log.atInfo().addKeyValue("k", v).log("msg")` | Key-value pairs as JSON fields |
 | `logging.structured.format.console: logstash` | Enable JSON (Spring Boot 4.x) |
 | `kv("field", value)` | Structured argument (Logstash encoder) |
