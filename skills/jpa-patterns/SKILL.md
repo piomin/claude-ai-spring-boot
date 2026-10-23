@@ -22,10 +22,12 @@ Best practices and common pitfalls for JPA/Hibernate in Spring applications.
 | Problem | Symptom | Solution |
 |---------|---------|----------|
 | N+1 queries | Many SELECT statements | JOIN FETCH, @EntityGraph |
-| LazyInitializationException | Error outside transaction | Open Session in View, DTO projection, JOIN FETCH |
+| LazyInitializationException | Error outside transaction | DTO projection, JOIN FETCH (not Open Session in View) |
 | Slow queries | Performance issues | Pagination, projections, indexes |
 | Dirty checking overhead | Slow updates | Read-only transactions, DTOs |
 | Lost updates | Concurrent modifications | Optimistic locking (@Version) |
+| Entity lost from `HashSet` after persist | `equals`/`hashCode` on generated id | Natural key, or id-based with constant `hashCode` |
+| Stale entities after bulk update | Old values read in same transaction | `@Modifying(clearAutomatically = true)` |
 
 ---
 
@@ -214,6 +216,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 }
 ```
 
+### Disable Open Session in View
+
+Spring Boot enables OSIV by default (and logs a warning at startup). It keeps the persistence context and a DB connection open until the response is written, so lazy loads in controllers or JSON serialization "work" while hiding N+1 queries.
+
+```yaml
+spring:
+  jpa:
+    open-in-view: false  # fetch what the response needs in the service layer
+```
+
 ---
 
 ## Transaction Management
@@ -332,6 +344,115 @@ public class ProductService {
 
 ---
 
+## Entity Design
+
+### equals() and hashCode()
+
+```java
+// ✅ Business key: stable before and after persist
+@Entity
+public class Book {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @NaturalId  // org.hibernate.annotations.NaturalId
+    @Column(nullable = false, unique = true, updatable = false)
+    private String isbn;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        return o instanceof Book other && isbn != null && isbn.equals(other.isbn);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(isbn);
+    }
+}
+
+// ✅ No natural key: id-based equality, constant hashCode
+@Override
+public boolean equals(Object o) {
+    if (this == o) return true;
+    return o instanceof Order other && id != null && id.equals(other.id);
+}
+
+@Override
+public int hashCode() {
+    return getClass().hashCode();  // unchanged when the id is assigned on persist
+}
+```
+
+- Never include all fields: mutable fields change the hash, lazy associations trigger loads
+- Use `instanceof` (not `getClass()`) in `equals` so Hibernate proxies compare equal
+
+### Bidirectional Relationships
+
+```java
+@Entity
+public class Author {
+
+    @OneToMany(mappedBy = "author", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Book> books = new ArrayList<>();
+
+    // ✅ Keep both sides in sync - the @ManyToOne side owns the FK
+    public void addBook(Book book) {
+        books.add(book);
+        book.setAuthor(this);
+    }
+
+    public void removeBook(Book book) {
+        books.remove(book);
+        book.setAuthor(null);
+    }
+}
+
+@Entity
+public class Book {
+
+    @ManyToOne(fetch = FetchType.LAZY)  // ✅ No cascade on the child side
+    @JoinColumn(name = "author_id")
+    private Author author;
+}
+```
+
+```java
+// ✅ @ManyToMany: Set (a List makes Hibernate delete and re-insert the whole join table)
+//    and PERSIST/MERGE only - never REMOVE or ALL
+@ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+@JoinTable(name = "student_course",
+    joinColumns = @JoinColumn(name = "student_id"),
+    inverseJoinColumns = @JoinColumn(name = "course_id"))
+private Set<Course> courses = new HashSet<>();
+```
+
+If the link carries data (enrolment date, grade), map the join table as its own entity with two `@ManyToOne`.
+
+### Common Mapping Mistakes
+
+```java
+// ❌ BAD: CascadeType.ALL on @ManyToOne - removing a book removes its shared author
+@ManyToOne(cascade = CascadeType.ALL)
+private Author author;
+
+// ❌ BAD: toString() touching a lazy collection - extra query,
+//    LazyInitializationException outside a transaction, StackOverflowError on bidirectional links
+@Override
+public String toString() {
+    return "Author{id=" + id + ", books=" + books + "}";
+}
+
+// ✅ GOOD: basic columns only
+@Override
+public String toString() {
+    return "Author{id=" + id + ", name='" + name + "'}";
+}
+```
+
+---
+
 ## Modern Hibernate Features
 
 ### Jakarta Persistence
@@ -433,6 +554,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
 }
 ```
 
+### Bulk Updates and Deletes
+
+Bulk JPQL bypasses the persistence context, lifecycle callbacks, cascades and `@Version` checks.
+
+```java
+public interface OrderRepository extends JpaRepository<Order, Long> {
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Order o SET o.status = :status WHERE o.createdAt < :before")
+    int archiveOlderThan(@Param("status") OrderStatus status, @Param("before") Instant before);
+}
+```
+
+- `flushAutomatically` writes pending changes before the query; `clearAutomatically` detaches stale entities after it
+- Call from a `@Transactional` service method
+- Increment the version explicitly (`SET o.version = o.version + 1`) if concurrent writers rely on optimistic locking
+
 ---
 
 ## Quick Decision Guide
@@ -443,6 +581,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 | LazyInitializationException | JOIN FETCH in query or @Transactional on service |
 | Read-only queries slow | `@Transactional(readOnly = true)` |
 | Concurrent updates | `@Version` + optimistic locking |
+| Entity equality | `@NaturalId`, or id-based `equals` with constant `hashCode` |
+| Bidirectional association | `add*`/`remove*` helper methods; `Set` for `@ManyToMany` |
+| Bulk UPDATE/DELETE | `@Modifying(clearAutomatically = true, flushAutomatically = true)` |
+| Lazy loads in web layer | `spring.jpa.open-in-view=false` |
 | Unbounded result set | Pagination with `PageRequest` |
 | Need only few columns | DTO projection or interface projection |
 | Soft delete required | `@SoftDelete` |
