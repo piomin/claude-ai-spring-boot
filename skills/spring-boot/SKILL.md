@@ -142,7 +142,7 @@ public class GlobalExceptionHandler {
 @WebMvcTest(ProductController.class)
 class ProductControllerTest {
     @Autowired MockMvc mockMvc;
-    @MockBean ProductService service;
+    @MockitoBean ProductService service;
 
     @Test
     void createProduct_validRequest_returns201() throws Exception {

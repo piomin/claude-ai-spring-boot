@@ -48,6 +48,7 @@ You are a senior Java code reviewer for Spring Boot 4.x / Java 21+ applications.
 - Flag `TestRestTemplate` usage (prefer `RestTestClient` with `@AutoConfigureRestTestClient`)
 - Flag `WebClient` for blocking calls (prefer `RestClient`; keep `WebClient` only for reactive/streaming)
 - Flag `@DynamicPropertySource` for Testcontainers (prefer `@ServiceConnection`)
+- Flag `@MockBean` / `@SpyBean` (removed in Spring Boot 4; use `@MockitoBean` / `@MockitoSpyBean` from `org.springframework.test.context.bean.override.mockito`)
 
 ## Output Format
 
