@@ -1,24 +1,13 @@
 # Security
 
-Applies to controllers, repositories, configuration and anything handling user input. For a deeper audit of authentication, authorization or infrastructure, hand off to the `security-engineer` agent.
+Checks that no project skill states as a rule. For a deeper audit of authentication, authorization or infrastructure, hand off to the `security-engineer` agent.
 
-- **Input validation**: missing `@Valid` on `@RequestBody`, unvalidated path variables and request parameters
+- **Input validation**: unvalidated path variables and request parameters (`@Valid @RequestBody` is a `conventions` rule)
 - **SQL injection**: string concatenation in `@Query`, raw JDBC without parameters
-- **Entity exposure**: JPA entities returned from controllers instead of DTOs (leaks internals, lazy-loading and N+1 risk)
-- **Error leakage**: a catch-all handler returning `ex.getMessage()` or a stack trace
 - **Secrets**: hardcoded credentials, secrets in `application.properties`
-- **Actuator**: `/actuator/health/**` probes behind authentication; other endpoints exposed without need
+- **Authorization**: endpoints reachable without a matching security rule, role checks done only in the UI
 
-```java
-// ❌ Exposes the entity
-@GetMapping("/{id}")
-public User getUser(@PathVariable Long id) {
-    return userRepository.findById(id).get();
-}
-
-// ✅ DTO from the service
-@GetMapping("/{id}")
-public UserResponse getUser(@PathVariable Long id) {
-    return userService.findById(id);
-}
-```
+Already covered elsewhere, check against the source instead of restating:
+- Entity exposure, `@Valid`, Problem Details, no `ex.getMessage()` in the catch-all, `/actuator/health/**` → `conventions` (Mandatory Rules, Code Quality Standards)
+- Public `health` / `info` and Keycloak layout for a UI → `spring-boot` → `references/ui-contract.md` §7
+- Security configuration patterns → `spring-boot` → `references/security.md`

@@ -1,21 +1,8 @@
 # Performance
 
-Applies when the diff touches repositories, queries, loops over entities or collections returned from the database.
+Signals to flag in repositories, queries and entity loops. Fixes and examples: `jpa-patterns` (N+1 Problem, Query Best Practices).
 
-- **N+1 queries**: lazy collections accessed in loops without `JOIN FETCH` or `@EntityGraph`; repository call inside a loop
-- **Unbounded queries**: `findAll()` without pagination on large tables
-- **`LIKE` from user input** without escaping `%`, `_` and `\`
-- **Missing indexes**: queries filtering on columns without `@Index` / an index in the migration
-
-```java
-// ❌ N queries
-for (User user : userRepository.findAll()) {
-    orderRepository.findByUserId(user.getId());
-}
-
-// ✅ One query
-@Query("SELECT u FROM User u LEFT JOIN FETCH u.orders")
-List<User> findAllWithOrders();
-```
-
-Deep dive: `jpa-patterns` skill.
+- Repository call or lazy collection access inside a loop (N+1)
+- `findAll()` without pagination on a large table
+- `LIKE` built from user input without escaping `%`, `_` and `\`
+- Filter or sort on a column with no index (index in the migration, not only `@Index`)

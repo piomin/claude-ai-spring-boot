@@ -1,11 +1,13 @@
 ---
 name: code-quality
-description: Review checklist for Java / Spring Boot code - correctness, security, performance, Spring conventions, API contract, database schema, and code smells. Use when user says "review code", "check this PR", "refactor", "check API", or before merging changes.
+description: Review checklist for Java / Spring Boot code - correctness, security, performance, Spring signals, REST semantics, and code smells; project rules are referenced from conventions, not repeated. Use when user says "review code", "check this PR", "refactor", "check API", or before merging changes.
 ---
 
 # Code Quality Review Skill
 
-Knowledge for reviewing Java / Spring Boot changes: **what to check** and how to recognize a violation. The review process, scope, and report format belong to the `code-reviewer` agent; project rules belong to the `conventions` skill.
+Knowledge for reviewing Java / Spring Boot changes: **what to flag** and how to recognize it. The review process, scope, and report format belong to the `code-reviewer` agent; project rules belong to the `conventions` skill.
+
+**No duplication:** this skill holds only what no other skill states (generic Java quality, smells, REST semantics, detection signals). Project rules live in `conventions`, `spring-boot`, and `jpa-patterns`; the references here point to them and never restate them, so a rule change is made in one place.
 
 ## When to Use
 - "review this code" / "code review" / "check this PR"
@@ -19,11 +21,11 @@ Read only the references that match the changed files.
 
 | If the change contains | Read |
 |------------------------|------|
-| Any Java code | `references/correctness.md`, `references/spring-conventions.md` |
+| Any Java code | `references/correctness.md`, `references/spring-conventions.md` (signals; rules in `conventions`) |
 | Controllers, DTOs, OpenAPI, error handling | `references/api-contract.md` |
 | Input handling, auth, config, secrets, actuator | `references/security.md` |
 | Repositories, queries, entity loops | `references/performance.md` |
-| Entities, `*.sql` migrations, `spring.jpa.*`, Flyway | `references/schema.md` |
+| Entities, `*.sql` migrations, `spring.jpa.*`, Flyway | `conventions` → Relational Database Schema (Flyway); `spring-boot` → `references/data.md` |
 | Any non-trivial logic | `references/smells.md` |
 
 Related skills, loaded only when the diff needs them:
@@ -58,7 +60,5 @@ Related skills, loaded only when the diff needs them:
 | Exceptions | empty catch, broad catch, lost stack trace |
 | Resources | manual `close()` |
 | Transactions | multi-step writes without `@Transactional`, self-invocation |
-| API | wrong verb or status, entity exposure, non-Problem-Details errors |
+| API | wrong verb or status |
 | Performance | N+1, `findAll()` without paging, `LIKE` from user input |
-| Schema | `ddl-auto: update`, edited applied migration, entity change without migration |
-| Conventions | Lombok, field injection, `RestTemplate`, `@MockBean` |

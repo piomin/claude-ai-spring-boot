@@ -1,6 +1,6 @@
 # Correctness
 
-Always applies to Java code in the diff.
+Generic Java checks. They are not project rules, so they live only here.
 
 ## Null safety
 - Chained calls without null checks (`user.getName().toUpperCase()`)
@@ -8,21 +8,12 @@ Always applies to Java code in the diff.
 - Returning `null` instead of `Optional` or an empty collection
 - Missing `@Nullable` / `@NonNull` on public APIs
 
-```java
-// ❌ NPE risk
-String name = user.getName().toUpperCase();
-
-// ✅ Early return
-if (user.getName() == null) return "";
-return user.getName().toUpperCase();
-```
-
 ## Exception handling
 - Empty catch blocks
 - Catching `Exception` / `Throwable` (too broad)
 - Swallowed or lost stack trace: `throw new RuntimeException(e.getMessage())`
 - New exception created without the original cause
-- Exception not logged and not rethrown
+- Exception neither logged nor rethrown
 
 ```java
 // ❌ Lost context
@@ -37,23 +28,13 @@ catch (IOException e) {
 ```
 
 ## Resource management
-- Manual `close()` instead of try-with-resources (not executed when the read throws)
+- Manual `close()` instead of try-with-resources (skipped when the read throws)
 
-## Transaction boundaries
-- Multi-step writes without `@Transactional`
-- Missing `readOnly = true` for reads
+## Transactions
+- Multi-step writes without `@Transactional`; missing `readOnly = true` on reads (rule: `conventions`, Code Quality Standards)
 - Self-invocation: `@Transactional` or `@Async` called via `this` (bypasses the proxy)
 
-```java
-// ❌ Two separate transactions
-public void createUser(UserCreateRequest request) {
-    User user = userRepository.save(new User());
-    roleRepository.save(new Role(user));
-}
-```
-
-## Concurrency and consistency (JPA)
-- Lost updates: `PUT` without a required `version` compared to the entity's, or `try/catch (OptimisticLockingFailureException)` around `save()` inside `@Transactional` (it is thrown at commit)
-- Relation writes with `open-in-view: false` outside `@Transactional`, or the response mapped after the transaction (`LazyInitializationException`, 500 after a successful write)
-
-Deep dive: `jpa-patterns` skill.
+## Lost updates and lazy loading
+Rules and examples are in `jpa-patterns` (Optimistic Locking, Transaction Management, Lazy Loading) and `spring-boot` → `references/ui-contract.md` §4. Flag:
+- `PUT` without a `version` compared to the entity's; `try/catch (OptimisticLockingFailureException)` around `save()` inside `@Transactional` (thrown at commit)
+- Relation writes with `open-in-view: false` outside `@Transactional`, or the response mapped after the transaction
