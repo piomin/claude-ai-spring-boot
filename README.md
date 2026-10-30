@@ -13,8 +13,13 @@ claude plugin install spring-boot-template@piomin
 Or install directly from repository
 
 ``` 
-claude plugin marketplace add https://github.com/piomin/claude-ai-spring-boot.git
+claude plugin marketplace add piomin/claude-ai-spring-boot
 claude plugin install spring-boot-template@piomin
+```
+
+Then run Claude Code and type:
+```shell
+/plugin
 ```
 
 To test locally during development:
