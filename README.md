@@ -13,8 +13,13 @@ claude plugin install spring-boot-template@piomin
 Or install directly from repository
 
 ``` 
-claude plugin marketplace add https://github.com/piomin/claude-ai-spring-boot.git
+claude plugin marketplace add piomin/claude-ai-spring-boot
 claude plugin install spring-boot-template@piomin
+```
+
+Then run Claude Code and type:
+```shell
+/plugin
 ```
 
 To test locally during development:
@@ -32,7 +37,7 @@ Specialized agents that Claude Code can invoke for specific tasks:
 | Agent | Purpose |
 |-------|---------|
 | `spring-boot-engineer` | Build Spring Boot 4.x apps with layered architecture and Problem Details errors; adds the OpenAPI contract rules when the API is built for a UI |
-| `code-reviewer` | Review code for correctness, security, Spring Boot conventions, and API contract quality for APIs built for a UI |
+| `code-reviewer` | Read-only review of a diff or branch: fixes the scope, loads the `conventions` and `code-quality` skills, reports cited findings by severity |
 | `kubernetes-specialist` | K8s deployments, probes, ConfigMap/Secret, Prometheus, Skaffold |
 | `devops-engineer` | CI/CD pipelines, Paketo Buildpacks, Skaffold |
 | `docker-expert` | Multi-stage Dockerfiles, Paketo Buildpacks, image optimization |
@@ -46,7 +51,7 @@ Reusable knowledge that Claude loads contextually:
 |-------|-----------------|
 | `conventions` | Mandatory project rules: No Lombok, constructor injection, RestClient, testing standards, conditional Flyway for relational databases, Problem Details, conditional OpenAPI contract rules for APIs built for a UI |
 | `spring-boot` | Core Spring Boot development with 6 reference guides (web incl. Problem Details and paging, OpenAPI with springdoc 3, data incl. Flyway migrations, security, cloud, testing) |
-| `code-quality` | Clean code principles, API contracts, null safety, exception handling |
+| `code-quality` | Review checklist loaded on demand from 6 references (correctness, security, performance, Spring signals, REST semantics, code smells); points to `conventions` and other skills for project rules instead of repeating them |
 | `design-patterns` | Classic patterns (Factory, Builder, Strategy) + enterprise (Saga, Outbox, CQRS) |
 | `testing-patterns` | JUnit 5, Mockito, MockMvc, RestTestClient, Testcontainers with @ServiceConnection, relation and status-endpoint integration tests, Podman |
 | `java-modern` | Java 21+ features: records, sealed classes, pattern matching, virtual threads |
@@ -132,7 +137,15 @@ You can also invoke skills and agents directly:
 │   └── spring-boot-engineer.md
 ├── skills/
 │   ├── conventions/SKILL.md
-│   ├── code-quality/SKILL.md
+│   ├── code-quality/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   │       ├── api-contract.md
+│   │       ├── correctness.md
+│   │       ├── performance.md
+│   │       ├── security.md
+│   │       ├── smells.md
+│   │       └── spring-conventions.md
 │   ├── design-patterns/SKILL.md
 │   ├── java-modern/SKILL.md
 │   ├── jpa-patterns/SKILL.md
