@@ -80,7 +80,7 @@ Reusable knowledge that Claude loads contextually:
 | Skill | What it teaches |
 |-------|-----------------|
 | `conventions` | Mandatory project rules: No Lombok, constructor injection, RestClient, testing standards, conditional Flyway for relational databases, Problem Details, conditional OpenAPI contract rules for APIs built for a UI |
-| `spring-boot` | Core Spring Boot development with 6 reference guides (web incl. Problem Details and paging, OpenAPI with springdoc 3, data incl. Flyway migrations, security, cloud, testing) |
+| `spring-boot` | Core Spring Boot development with 7 reference guides (web incl. Problem Details and paging, OpenAPI with springdoc 3, data incl. Flyway migrations, security, cloud, Spring AI 2.x, testing) |
 | `code-quality` | Review checklist loaded on demand from 6 references (correctness, security, performance, Spring signals, REST semantics, code smells); points to `conventions` and other skills for project rules instead of repeating them |
 | `design-patterns` | Classic patterns (Factory, Builder, Strategy) + enterprise (Saga, Outbox, CQRS) |
 | `testing-patterns` | JUnit 5, Mockito, MockMvc, RestTestClient, Testcontainers with @ServiceConnection, relation and status-endpoint integration tests, Podman |
@@ -187,6 +187,7 @@ You can also invoke skills and agents directly:
 │   ├── spring-boot/
 │   │   ├── SKILL.md
 │   │   └── references/
+│   │       ├── ai.md
 │   │       ├── cloud.md
 │   │       ├── data.md
 │   │       ├── ui-contract.md

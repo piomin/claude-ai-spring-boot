@@ -188,6 +188,7 @@ Load detailed patterns based on context:
 | Data Access | `references/data.md` | JPA, repositories, transactions, queries, Flyway migrations |
 | Security | `references/security.md` | Spring Security 6, OAuth2, JWT, auth |
 | Cloud/Config | `references/cloud.md` | Config server, discovery, resilience, virtual threads, HTTP interfaces, GraalVM native, OTLP tracing |
+| AI | `references/ai.md` | Only when the app calls an LLM: Spring AI 2.x `ChatClient`, structured output, tool calling, RAG, chat memory, MCP server, testing, 1.x to 2.0 renames |
 | Testing | `references/testing.md` | Unit, integration, slice tests, Testcontainers @ServiceConnection |
 
 ## Constraints
