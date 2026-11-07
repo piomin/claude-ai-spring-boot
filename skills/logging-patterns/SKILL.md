@@ -1,6 +1,6 @@
 ---
 name: logging-patterns
-description: Java logging best practices with SLF4J, structured logging (JSON), and MDC for request tracing. Includes AI-friendly log formats for Claude Code debugging. Use when user asks about logging, debugging application flow, or analyzing logs.
+description: Java logging best practices with SLF4J, structured logging (JSON), and MDC for request tracing. Includes AI-friendly log formats for AI coding assistant debugging. Use when user asks about logging, debugging application flow, or analyzing logs.
 ---
 
 # Logging Patterns Skill
@@ -12,7 +12,7 @@ description: Java logging best practices with SLF4J, structured logging (JSON), 
 - Analyzing application flow from logs
 - Setting up structured logging (JSON)
 - Request tracing with correlation IDs
-- AI/Claude Code needs to analyze application behavior
+- An AI coding assistant needs to analyze application behavior
 
 ---
 
@@ -20,7 +20,7 @@ description: Java logging best practices with SLF4J, structured logging (JSON), 
 
 > **Key insight:** JSON logs are better for AI analysis - faster parsing, fewer tokens, direct field access.
 
-### Why JSON for AI/Claude Code?
+### Why JSON for AI coding assistants?
 
 ```
 # Text format - AI must "interpret" the string
@@ -77,7 +77,7 @@ logging:
 - `duration_ms` - identify slow operations
 - `level` - quick filter for errors
 
-### Reading Logs with AI/Claude Code
+### Reading Logs with AI coding assistants
 
 When asking AI to analyze logs:
 

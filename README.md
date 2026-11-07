@@ -28,6 +28,36 @@ To test locally during development:
 claude --plugin-dir /path/to/claude-ai-spring-boot
 ```
 
+### Using the skills with Codex
+
+The skills in `skills/` use the open `SKILL.md` format (frontmatter with `name` and `description`, optional `references/` folder), so [OpenAI Codex](https://developers.openai.com/codex/skills) can load them without changes. The repo is also a Codex plugin (`.codex-plugin/plugin.json`) with a marketplace file (`.agents/plugins/marketplace.json`).
+
+**As a plugin** (skills only, no agents):
+
+```bash
+codex plugin marketplace add piomin/claude-ai-spring-boot
+```
+
+Then restart Codex, open the Plugins Directory, choose the `piomin` marketplace and install `spring-boot-template`. Update later with `codex plugin marketplace upgrade piomin`.
+
+**Or as plain skills.** Codex discovers skills in `.agents/skills` (per repository) and `$HOME/.agents/skills` (per user):
+
+```bash
+git clone https://github.com/piomin/claude-ai-spring-boot.git
+
+# for all your projects
+mkdir -p ~/.agents/skills
+cp -r claude-ai-spring-boot/skills/* ~/.agents/skills/
+
+# or for a single project
+mkdir -p my-project/.agents/skills
+cp -r claude-ai-spring-boot/skills/* my-project/.agents/skills/
+```
+
+Codex follows symlinks, so you can `ln -s` each skill folder instead of copying to get updates with `git pull`. Restart Codex if the skills do not show up, then run `/skills` or type `$` to pick one, or just describe the task and Codex selects a matching skill.
+
+The `agents/` folder uses the Claude Code subagent format and is **Claude Code only**. Skills mention the `code-reviewer` and `security-engineer` agents as hand-offs; in Codex, ignore those references and apply the skill directly.
+
 ## What's Included
 
 ### Agents (`agents/`)
@@ -126,7 +156,11 @@ You can also invoke skills and agents directly:
 
 ```
 .
+├── .agents/plugins/
+│   └── marketplace.json
 ├── .claude-plugin/
+│   └── plugin.json
+├── .codex-plugin/
 │   └── plugin.json
 ├── agents/
 │   ├── code-reviewer.md
