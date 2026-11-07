@@ -1,4 +1,4 @@
-# Spring Boot Plugin for Claude Code (v1.2)
+# Spring Boot Plugin for Claude Code (v1.2.1)
 
 A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
 
