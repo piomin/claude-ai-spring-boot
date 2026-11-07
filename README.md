@@ -30,7 +30,17 @@ claude --plugin-dir /path/to/claude-ai-spring-boot
 
 ### Using the skills with Codex
 
-The skills in `skills/` use the open `SKILL.md` format (frontmatter with `name` and `description`, optional `references/` folder), so [OpenAI Codex](https://developers.openai.com/codex/skills) can load them without changes. Codex discovers skills in `.agents/skills` (per repository) and `$HOME/.agents/skills` (per user):
+The skills in `skills/` use the open `SKILL.md` format (frontmatter with `name` and `description`, optional `references/` folder), so [OpenAI Codex](https://developers.openai.com/codex/skills) can load them without changes. The repo is also a Codex plugin (`.codex-plugin/plugin.json`) with a marketplace file (`.agents/plugins/marketplace.json`).
+
+**As a plugin** (skills only, no agents):
+
+```bash
+codex plugin marketplace add piomin/claude-ai-spring-boot
+```
+
+Then restart Codex, open the Plugins Directory, choose the `piomin` marketplace and install `spring-boot-template`. Update later with `codex plugin marketplace upgrade piomin`.
+
+**Or as plain skills.** Codex discovers skills in `.agents/skills` (per repository) and `$HOME/.agents/skills` (per user):
 
 ```bash
 git clone https://github.com/piomin/claude-ai-spring-boot.git
@@ -146,7 +156,11 @@ You can also invoke skills and agents directly:
 
 ```
 .
+├── .agents/plugins/
+│   └── marketplace.json
 ├── .claude-plugin/
+│   └── plugin.json
+├── .codex-plugin/
 │   └── plugin.json
 ├── agents/
 │   ├── code-reviewer.md

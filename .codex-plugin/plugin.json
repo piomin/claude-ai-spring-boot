@@ -1,0 +1,14 @@
+{
+  "name": "spring-boot-template",
+  "version": "1.2.0",
+  "description": "Enterprise Spring Boot 4.x development skills and best practices for REST APIs, JPA, security, testing, and cloud-native deployment.",
+  "author": {
+    "name": "Piotr Mińkowski",
+    "url": "https://github.com/piomin"
+  },
+  "homepage": "https://piotrminkowski.com/2026/03/24/claude-code-template-for-spring-boot/",
+  "repository": "https://github.com/piomin/claude-ai-spring-boot",
+  "license": "Apache-2.0",
+  "keywords": ["spring-boot", "java", "maven", "jpa", "testing", "kubernetes"],
+  "skills": "./skills/"
+}
