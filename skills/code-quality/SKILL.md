@@ -27,6 +27,7 @@ Read only the references that match the changed files.
 | Repositories, queries, entity loops | `references/performance.md` |
 | Entities, `*.sql` migrations, `spring.jpa.*`, Flyway | `conventions` → Relational Database Schema (Flyway); `spring-boot` → `references/data.md` |
 | Any non-trivial logic | `references/smells.md` |
+| `deploy/**`, `skaffold.yaml`, `docker-compose.yml`, Kubernetes manifests | `spring-boot` → `references/cloud.md` (overlays, probes, Compose healthchecks); `references/security.md` (secrets) |
 
 Related skills, loaded only when the diff needs them:
 

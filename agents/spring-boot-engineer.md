@@ -54,7 +54,7 @@ src/main/resources/
 
 Apply this section **only** when the API is built for a web UI or another client generated from its OpenAPI contract (the user says so, the project's `CLAUDE.md` names a UI, or the repo has `contract/openapi.json`); see the `conventions` skill, "REST API Built for a UI". Ask once if unsure. A plain API skips it.
 
-Load the `spring-boot` skill, `references/ui-contract.md`, and follow it in full: `/api` base path without CORS, springdoc 3 contract exported to `contract/openapi.json`, the fixed error codes, `PUT` with `version`, filters, `Reference {id, label}` relations, the Keycloak realm layout, public `health`/`info`, and the README "Connect a UI" section. Its rules override the defaults of this agent (e.g. `/api/v1`).
+Load the `spring-boot` skill, `references/ui-contract.md`, and follow it in full: `/api` base path without CORS, springdoc 3 contract exported to `contract/openapi.json`, the fixed error codes, `PUT` with `version`, filters, `Reference {id, label}` relations, the Keycloak realm layout (no host or secret in the realm file), public `health`/`info`, the README "Connect a UI" section, and the `deploy/` layout shared with the UI repo. Its rules override the defaults of this agent (e.g. `/api/v1`).
 
 ## Default application.yml
 
@@ -111,4 +111,4 @@ management:
 9. Run `./mvnw clean verify` and confirm all tests pass, with integration tests running (not skipped)
 10. Update README.md
 
-Built for a UI: also follow the build order and Definition of Done in `references/ui-contract.md` (section 10).
+Built for a UI: also follow the build order and Definition of Done in `references/ui-contract.md` (section 10) and its deployment rules (section 11).

@@ -526,6 +526,37 @@ ALTER TABLE users
 
 For a database created before Flyway, export the current schema into `V1__initial_schema.sql`, or set `spring.flyway.baseline-on-migrate: true` (with `baseline-version`) so Flyway marks the existing schema as baseline and applies only newer migrations.
 
+### Demo Data Seed
+
+When a fresh deploy should show records (a UI demo, UI performance tests), seed them with a Flyway **callback**, not a migration. A migration runs once and stays in the schema history. A callback runs after every migrate and can check whether the data is still needed.
+
+```yaml
+spring:
+  flyway:
+    # db/demo seeds demo data into an empty database; switch it off with
+    # SPRING_FLYWAY_LOCATIONS=classpath:db/migration
+    locations: classpath:db/migration,classpath:db/demo
+```
+
+```sql
+-- src/main/resources/db/demo/afterMigrate__seed_demo_data.sql
+-- Runs after every migrate in one transaction; inserts only when the tables are empty, so it never touches real data.
+SELECT setseed(0.42);                     -- the same data on every run
+
+CREATE TEMP TABLE seed_run ON COMMIT DROP AS
+SELECT NOT EXISTS (SELECT 1 FROM users) AS empty;
+
+INSERT INTO users (email, username, active, created_at, updated_at, version)
+SELECT 'user' || i || '@seed.example.com', 'user' || i, random() < 0.9, now(), now(), 0
+FROM generate_series(1, 250) AS i
+WHERE (SELECT empty FROM seed_run);
+```
+
+- Mark the seed rows (e.g. the e-mail domain `seed.example.com`) and document the cleanup `DELETE`s in the file header.
+- Include edge cases the UI must handle: long names, non-ASCII characters, apostrophes, optional fields left empty.
+- Update the seed in the same commit as any schema change.
+- A dedicated integration test keeps it working. It seeds an empty database, a second `flyway.migrate()` changes nothing, and partly filled tables are not seeded again. The other integration tests turn it off with `@SpringBootTest(properties = "spring.flyway.locations=classpath:db/migration")`, so their assertions don't depend on demo rows.
+
 ### Testing
 
 Run integration tests against the production engine with Testcontainers and `@ServiceConnection`, so Flyway applies the real migrations and Hibernate validates them. Assert that all migrations were applied - see `testing.md`.

@@ -188,43 +188,23 @@ Advantages over Dockerfile:
 - Optimized layer caching (dependencies, application, etc.)
 - Compliance with OCI image standards
 
-## Local Development with Skaffold
+## Deployment with Skaffold and Kustomize Overlays
 
-Skaffold automates the build → push → deploy loop for Kubernetes development.
+One set of manifests for a local cluster, any Kubernetes and OpenShift. Full example in the `spring-boot` skill, `references/cloud.md` ("Kubernetes and OpenShift with Skaffold and Kustomize Overlays"):
 
-```yaml
-# skaffold.yaml
-apiVersion: skaffold/v4beta11
-kind: Config
-metadata:
-  name: <app-name>
-build:
-  artifacts:
-  - image: <app-name>
-    custom:
-      buildCommand: |
-        ./mvnw spring-boot:build-image \
-          -Dspring-boot.build-image.imageName=$IMAGE -q
-      dependencies:
-        paths:
-        - src/**
-        - pom.xml
-deploy:
-  kubectl:
-    manifests:
-    - k8s/*.yaml
-```
+- `deploy/base` (plain Kubernetes) + `deploy/overlays/{local,openshift,kubernetes}` + git-ignored `deploy/environments/<env>` (a committed `example/`). OpenShift-only kinds (Route, Topology labels) stay in `overlays/openshift`, never in `base`.
+- Nothing in git names a cluster, host, registry, namespace or secret value. The image is the bare name with `--default-repo`, `tagPolicy: gitCommit`, and the namespace comes from `-n`. A before-deploy hook (`deploy/ensure-secrets.sh`) creates missing Secrets with random values and never changes existing ones.
+- Skaffold profiles: default (`local`, with port forwarding), `openshift` and `kubernetes` (port forwarding removed). Kustomize path `'{{ default "deploy/overlays/<profile>" .DEPLOY_OVERLAY }}'`.
+- Only kustomize 3.8 features (`resources`, `patches`, generators): no `labels`, `replacements` or `components`.
+- CI runs `kustomize build` on every overlay.
 
 ```bash
-# Continuous development - rebuild and redeploy on code changes
-skaffold dev
-
-# One-time deploy
-skaffold run
-
-# Deploy to specific profile/environment
-skaffold run -p production
+skaffold dev                                                              # local cluster
+skaffold run -p openshift --default-repo=quay.io/<org> -n <namespace>     # or -p kubernetes
+DEPLOY_OVERLAY=deploy/environments/<env> skaffold run -p openshift ...    # an environment overlay
 ```
+
+Check the target before giving deployment steps (`kubectl config current-context`, `oc whoami --show-server`). On OpenShift, expose services through Routes (`-p openshift`) and never recommend port forwarding.
 
 ## Key Practices
 
@@ -234,6 +214,9 @@ skaffold run -p production
 - Startup probe → same as liveness, with higher `failureThreshold` (handles slow startup)
 - Graceful shutdown: `server.shutdown=graceful` + `preStop` hook with `sleep 10`
 - `spring.lifecycle.timeout-per-shutdown-phase=30s` for in-flight request completion
+- Dependencies in the same namespace get all three probes too: PostgreSQL `pg_isready -h 127.0.0.1` (a startup probe every 2 s), Keycloak `/health/started|ready|live` on management port 9000 with `KC_HEALTH_ENABLED=true`
+- PostgreSQL stores its data on a PVC with `strategy: Recreate`; without one every redeploy starts empty
+- Prove each new probe can fail: Warning events before the service is up, and no restarts of dependent pods
 
 ### Resource Management
 - Use `-XX:MaxRAMPercentage=75.0` instead of fixed `-Xmx` (adapts to container limits)

@@ -21,14 +21,16 @@ You are a senior DevOps engineer specializing in CI/CD pipelines and deployment 
 - **Alternative:** Multi-stage Dockerfile with `eclipse-temurin:21-jdk-alpine` build / `eclipse-temurin:21-jre-alpine` runtime
 - Non-root user execution, HEALTHCHECK pointing to `/actuator/health`
 
-### Skaffold (Local K8s Development)
-- `skaffold dev` for continuous build → deploy → watch loop
-- Integrates with `spring-boot:build-image` as custom build command
-- `skaffold.yaml` defines artifacts, deploy manifests, and environment profiles
+### Skaffold and Kustomize (Kubernetes and OpenShift)
+- `skaffold dev` for the local build → deploy → watch loop; `skaffold run -p openshift|kubernetes --default-repo=<registry> -n <namespace>` for clusters
+- `deploy/base` + `deploy/overlays/{local,openshift,kubernetes}` + git-ignored environment overlays; no cluster, host, registry, namespace or secret value in git (`spring-boot` skill, `references/cloud.md`)
+- Secrets created by a Skaffold before-deploy hook, never committed; CI renders every overlay with `kustomize build`
+- Advise for the target platform: check it first (`oc whoami --show-server`); OpenShift uses Routes, port forwarding is for a local cluster only
 
 ### Docker Compose
 - Define all application dependencies (PostgreSQL, Redis, Kafka, etc.)
 - Health checks on all services with `depends_on.condition: service_healthy` (required for relational databases: Flyway migrates the schema on application startup)
+- Shell healthchecks as `["CMD-SHELL", "<script>"]`: Podman splits a `CMD` array on spaces and reports healthy too early. `docker compose up -d --wait` returns once all are healthy
 - Named volumes for data persistence
 - Environment variables for Spring Boot configuration (`SPRING_DATASOURCE_URL`, etc.)
 

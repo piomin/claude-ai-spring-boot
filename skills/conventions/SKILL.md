@@ -54,11 +54,11 @@ Decide first whether these rules apply. They are **required only when the API is
 
 | Situation | Action |
 |-----------|--------|
-| The user says the API backs a web UI or generated clients; the project's `CLAUDE.md` names a UI (e.g. a `crud-ui-blueprint` UI); the repo has `contract/openapi.json` or `docs/API-CONTRACT.md` | **Load the `spring-boot` skill, `references/ui-contract.md`, and follow it** |
+| The user says the API backs a web UI or generated clients; the project's `CLAUDE.md` names a UI (e.g. a `crud-ui-blueprint` UI); the repo has `contract/openapi.json`, `docs/API-CONTRACT.md` or `docs/DEPLOY-CONVENTION.md` | **Load the `spring-boot` skill, `references/ui-contract.md`, and follow it** |
 | Service-to-service API, internal API, or no client is generated from the contract | **Optional** - the general rules above are enough; use a rule from `ui-contract.md` only when the user asks for it |
 | Unsure | Ask once whether a UI or generated client will consume the API |
 
-`references/ui-contract.md` is the single source of these rules: `/api` base path without CORS, operationIds, the springdoc 3 contract exported to `contract/openapi.json` and checked in CI, the fixed `FieldError` codes, `PUT` with a required `version`, filters, `Reference {id, label}` relations, Keycloak realm layout, public `health`/`info`, and the README "Connect a UI" section. Where it differs from the defaults above (e.g. `/api` instead of `/api/v1`), it wins; a contract document in the project (`docs/API-CONTRACT.md`) wins over both.
+`references/ui-contract.md` is the single source of these rules: `/api` base path without CORS, operationIds, the springdoc 3 contract exported to `contract/openapi.json` and checked in CI, the fixed `FieldError` codes, `PUT` with a required `version`, filters, `Reference {id, label}` relations, Keycloak realm layout, public `health`/`info`, the README "Connect a UI" section, and the deployment shared with the UI repo (`deploy/` overlays, no host or secret in git). Where it differs from the defaults above (e.g. `/api` instead of `/api/v1`), it wins; the project's own copies of `docs/API-CONTRACT.md` and `docs/DEPLOY-CONVENTION.md` win over both.
 
 ## Relational Database Schema (Flyway)
 
