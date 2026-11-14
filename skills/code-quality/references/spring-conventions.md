@@ -7,13 +7,14 @@ The rules are in the `conventions` skill (Mandatory Rules, Code Quality Standard
 |-------|--------|
 | No Lombok, constructor injection, RestClient, RestTestClient, `@ServiceConnection`, Jakarta, records for DTOs | `conventions` → Mandatory Rules |
 | `@RestControllerAdvice`, Problem Details, `PagedModel` (never `Page`/`PageImpl`), `@Version`, `@Valid`, transactions, actuator probes | `conventions` → Code Quality Standards |
-| Controller → Service → Repository layering | `spring-boot` → Architecture Patterns |
+| Controller → Service → Repository layering (layered CRUD) | `spring-boot` → Architecture Patterns |
+| Controller → handler → repository, package rules (`style: cqrs`) | `conventions` → Architecture Decision; `event-driven` → `references/topology.md` |
 
 ## Signals
 - Any Lombok annotation (`@Data`, `@Getter`, `@Setter`, `@RequiredArgsConstructor`, `@Slf4j`, `@Builder`, ...)
 - `@Autowired` on a field
 - `Page` / `PageImpl` returned from a controller; `@EnableSpringDataWebSupport` on the application class (breaks `@WebMvcTest`)
-- Controller using a repository directly, or a service returning an entity to the web layer
+- Controller using a repository directly, or a service returning an entity to the web layer (in a `style: cqrs` project a controller calls handlers, and that is not a finding)
 
 ## Outdated APIs not named in `conventions`
 | Found | Use instead |

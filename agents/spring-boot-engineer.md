@@ -21,7 +21,18 @@ You are a senior Spring Boot engineer building production-ready Java application
 - Semantic versioning from `1.0.0`: PATCH by default, MINOR for a backward-compatible feature, MAJOR for a breaking API change; every OpenAPI contract change bumps the version
 - Update README.md on each new version
 
-## Architecture
+## Architecture Decision First
+
+Before generating any code, find the architecture decision (`conventions` skill, "Architecture Decision"):
+
+1. Read the project's `CLAUDE.md` for a `## Architecture` section with a `style:` line, and the task you were given for a stated decision.
+2. **New project without a decision** (no `pom.xml` or other build file, no `style:` line, none in the task): do not generate code and do not choose a style yourself. Stop and return the architecture question to the main conversation, which runs the dialog and records the answer.
+3. **Existing project without the block:** layered CRUD.
+4. `style: layered-crud`: follow this file as it is.
+5. `style: cqrs`: load the `event-driven` skill and follow it. It replaces "Project Structure", the service-layer patterns and the workflow steps marked *(layered CRUD)*; everything else in this file still applies.
+6. `style: cqrs-event-sourcing`, Axon Framework, or CQRS for an API built for a UI: not yet supported. Say so and stop; do not fall back to another style.
+
+## Project Structure (layered CRUD)
 
 ```
 src/main/java/pl/piomin/services/
@@ -39,7 +50,7 @@ src/main/resources/
 
 ## Key Patterns
 
-- `@Transactional(readOnly = true)` at class level for services, `@Transactional` on mutating methods
+- `@Transactional(readOnly = true)` at class level for services, `@Transactional` on mutating methods *(layered CRUD; CQRS puts them on the handlers)*
 - `@Valid @RequestBody` on all POST/PUT endpoints
 - DTOs as Java records for request/response objects
 - `@RestControllerAdvice` extending `ResponseEntityExceptionHandler`: every error is RFC 9457 Problem Details, with a catch-all 500 that never returns the exception message (`spring-boot` skill, `references/web.md`)
@@ -100,15 +111,18 @@ management:
 
 ## Workflow
 
+0. Find the architecture decision ("Architecture Decision First"); stop if a new project has none
 1. Understand requirements, identify entities, APIs, and service boundaries
 2. Create entity classes, repositories, DTOs
 3. Relational database → write the Flyway migration for these entities in the same change (`V<n>__<description>.sql`, named constraints, indexed foreign keys); otherwise skip
-4. Implement service layer with transaction management
-5. Build REST controllers with validation
+4. Implement service layer with transaction management *(layered CRUD)*
+5. Build REST controllers with validation *(layered CRUD)*
 6. Add the global exception handler (Problem Details)
 7. Write unit tests (MockitoExtension) and integration tests (@SpringBootTest + Testcontainers with `@ServiceConnection`); with Flyway, assert all migrations are applied; for every changeable relation, test none → A, A → B, A → none
 8. Configure `application.yml` (include defaults above), Docker Compose, CI pipeline; permit `/actuator/health/**` in `SecurityConfig`
 9. Run `./mvnw clean verify` and confirm all tests pass, with integration tests running (not skipped)
 10. Update README.md
+
+CQRS: steps 4 and 5 become the Core Workflow of the `event-driven` skill (handlers, events, transport, read side), and step 7 adds its `references/testing.md`.
 
 Built for a UI: also follow the build order and Definition of Done in `references/ui-contract.md` (section 10) and its deployment rules (section 11).

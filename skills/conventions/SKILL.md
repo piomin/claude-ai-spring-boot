@@ -1,10 +1,10 @@
 ---
 name: conventions
-description: Spring Boot project conventions and mandatory rules. Auto-loads when working with Spring Boot, Java, or Maven projects. Enforces No-Lombok, constructor injection, RestClient, Flyway for relational databases, Problem Details errors, and other standards; adds OpenAPI contract rules when the API is built for a UI.
+description: Spring Boot project conventions and mandatory rules. Auto-loads when working with Spring Boot, Java, or Maven projects, and before a new Spring Boot project or REST API is generated - it asks for the architecture style (layered CRUD, CQRS, Event Sourcing) first. Enforces No-Lombok, constructor injection, RestClient, Flyway for relational databases, Problem Details errors, and other standards; adds OpenAPI contract rules when the API is built for a UI.
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   domain: backend
-  triggers: Spring Boot, Java, Maven, Spring Framework, REST API, JPA, Hibernate, microservices, Flyway, database migration, PostgreSQL, MySQL, OpenAPI, springdoc, Problem Details, Actuator
+  triggers: Spring Boot, Java, Maven, Spring Framework, REST API, new project, architecture, CQRS, Event Sourcing, JPA, Hibernate, microservices, Flyway, database migration, PostgreSQL, MySQL, OpenAPI, springdoc, Problem Details, Actuator
   role: guide
   scope: conventions
   output-format: code
@@ -13,6 +13,73 @@ metadata:
 # Spring Boot Project Conventions
 
 These conventions apply to ALL code generated or reviewed in the project. Follow them strictly.
+
+## Architecture Decision
+
+Decide the architecture style before generating any code. The decision is recorded once in the project's `CLAUDE.md` (`AGENTS.md` in Codex) and followed in every later session.
+
+| Situation | Action |
+|-----------|--------|
+| New project: no build file (`pom.xml`, `build.gradle*`) and no architecture block | **Ask**, even when the prompt does not mention architecture |
+| The prompt already states a choice | Skip that question, confirm the choice in one line, ask the remaining ones |
+| The architecture block exists | Never ask again; follow it |
+| Existing project without the block | Layered CRUD; ask only when the user requests CQRS or Event Sourcing |
+
+The architecture block is a `## Architecture` section that has a `style:` line. A `## Architecture` heading without `style:` is a description, not a decision.
+
+**Who asks.** The dialog runs in the main conversation, one question at a time, with the default listed first. A subagent that is started without a decision does not ask and does not generate code: it stops and returns the question to the main conversation.
+
+| # | Question | Options (default first) | Asked when |
+|---|----------|-------------------------|------------|
+| 1 | Architecture style | Layered CRUD / CQRS / CQRS + Event Sourcing | always |
+| 2 | Scope | Which aggregates or bounded contexts | style is not CRUD |
+| 3 | Topology | Separate command and query services / Single service | style is not CRUD |
+| 4 | Event transport | Apache Kafka / In-process events (Spring Modulith) | single service only; separate services always use Kafka |
+| 5 | Read model store | PostgreSQL / another store named by the user | style is not CRUD |
+| 6 | Event store | PostgreSQL append-only table / Axon Framework | Event Sourcing (not yet supported) |
+
+With question 1, state the cost in two lines:
+
+> CQRS: a query right after a command may still return the old state (eventual consistency), and there is more code: commands, queries, handlers, events and projections.
+> Event Sourcing adds event versioning: a published event is never changed, so every change to it needs a new version.
+
+If the user picks layered CRUD, ask nothing else.
+
+**Not yet supported.** Reply "not yet supported in this version of the plugin" and ask again between the supported options. Never fall back silently:
+
+- **CQRS + Event Sourcing** and **Axon Framework**, whether picked in the dialog, stated in the prompt, or found as `style: cqrs-event-sourcing` in an existing block.
+- **CQRS for an API built for a UI** (see "REST API Built for a UI"): the UI contract expects one API that returns the full record on every write. Offer layered CRUD only.
+
+**Record the decision** before generating code. Create the file if the project has none, and keep the rest of an existing file:
+
+    ## Architecture
+    style: cqrs
+    scope: Order, Payment
+    topology: separate-services
+    transport: kafka
+    read-store: postgresql
+
+| Key | Values |
+|-----|--------|
+| `style` | `layered-crud`, `cqrs` (`cqrs-event-sourcing` is reserved) |
+| `scope` | aggregate or bounded context names |
+| `topology` | `separate-services`, `single-service` |
+| `transport` | `kafka`, `in-process` |
+| `read-store` | `postgresql`, or the store the user named |
+
+Layered CRUD is recorded as the single line `style: layered-crud`, so a subagent or a later session does not ask again. Record a decision only after the dialog ran: an existing project without the block is layered CRUD as it is, and gets no block added.
+
+**What each style replaces.** Every rule in this skill applies to every style, except:
+
+| Rule | Layered CRUD | CQRS |
+|------|--------------|------|
+| Layering and packages | Controller → Service → Repository (`spring-boot` skill, Architecture Patterns) | Controller → handler → repository, in `command`, `query`, `domain`, `projection` packages |
+| `@Transactional(readOnly = true)` at service class level | applies | `@Transactional` on command handlers, `@Transactional(readOnly = true)` on query handlers |
+| Request records | `<Resource>CreateRequest`, `<Resource>UpdateRequest` | command records (`Create<Resource>Command`, ...) |
+| What a write returns | the record (`<Resource>Response`) | `CommandResult` with the id and the new `version`; only queries return `<Resource>Response` |
+| Identity columns for ids | every table | write side only; a read-model table takes its id from the events |
+
+When the style is `cqrs`, load the `event-driven` skill and follow it. It holds the topology, the CQRS rules, Kafka and testing.
 
 ## Mandatory Rules
 
@@ -74,7 +141,7 @@ When Flyway applies:
 
 - Flyway owns the schema (`src/main/resources/db/migration`); Hibernate only validates it (`spring.jpa.hibernate.ddl-auto: validate`). Never use `update`/`create` outside tests
 - Dependencies: `spring-boot-starter-flyway` plus the database module (e.g. `flyway-database-postgresql`)
-- `application.yml`: `ddl-auto: validate`, `open-in-view: false`, and the database in the readiness probe (`management.endpoint.health.group.readiness.include: readinessState,db`). Flyway defaults need no `spring.flyway.*` keys
+- `application.yml`: `ddl-auto: validate`, `open-in-view: false`, and the database in the readiness probe (`management.endpoint.health.group.readiness.include: readinessState,db`). Flyway defaults need no `spring.flyway.*` keys (exception: a CQRS single service with `command` and `query` schemas sets `spring.flyway.schemas`, see the `event-driven` skill)
 - IDs are standard identity columns mapped with `GenerationType.IDENTITY`: `GENERATED BY DEFAULT AS IDENTITY` (PostgreSQL, Oracle, DB2, H2), `AUTO_INCREMENT` (MySQL/MariaDB), `IDENTITY` (SQL Server); not `SERIAL`/`BIGSERIAL`
 - Never edit an applied migration; every change is one new file `V<n>__<description>.sql`
 - Every entity change ships with its migration in the same commit

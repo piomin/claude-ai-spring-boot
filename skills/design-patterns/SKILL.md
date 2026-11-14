@@ -283,79 +283,21 @@ player.play("song.mp3");
 **Problem:** Atomically update database AND publish an event (dual-write problem)
 
 ```java
-// ✅ Outbox pattern - write event to DB in same transaction, poll and publish later
-@Entity
-@Table(name = "outbox_events")
-public class OutboxEvent {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private String aggregateType;
-    private String aggregateId;
-    private String eventType;
-
-    @Column(columnDefinition = "TEXT")
-    private String payload;
-
-    private LocalDateTime createdAt;
-    private boolean published;
-
-    // getters/setters
+// ✅ Outbox pattern - the event is stored in the same transaction as the state change
+@Transactional
+public CommandResult handle(CreateOrderCommand command) {
+    Order order = repository.saveAndFlush(new Order(command.customerId(), command.total()));
+    outbox.append(OrderEvent.TOPIC, order.getId(), new OrderCreated(order.getId(), order.getVersion(),
+            order.getCustomerId(), order.getStatus(), order.getTotal(), Instant.now()));
+    return new CommandResult(order.getId(), order.getVersion());
 }
 
-@Service
-public class OrderService {
-    private final OrderRepository orderRepository;
-    private final OutboxEventRepository outboxRepository;
-
-    public OrderService(OrderRepository orderRepository, OutboxEventRepository outboxRepository) {
-        this.orderRepository = orderRepository;
-        this.outboxRepository = outboxRepository;
-    }
-
-    @Transactional
-    public Order createOrder(OrderRequest request) {
-        Order order = new Order();
-        order.setStatus(OrderStatus.CREATED);
-        order = orderRepository.save(order);
-
-        OutboxEvent event = new OutboxEvent();
-        event.setAggregateType("Order");
-        event.setAggregateId(order.getId().toString());
-        event.setEventType("OrderCreated");
-        event.setPayload(toJson(order));
-        event.setCreatedAt(LocalDateTime.now());
-        event.setPublished(false);
-        outboxRepository.save(event);
-
-        return order;
-    }
-}
-
-// Poller publishes events and marks them as published
-@Component
-public class OutboxPoller {
-    private final OutboxEventRepository outboxRepository;
-    private final KafkaTemplate<String, String> kafka;
-
-    public OutboxPoller(OutboxEventRepository outboxRepository,
-                        KafkaTemplate<String, String> kafka) {
-        this.outboxRepository = outboxRepository;
-        this.kafka = kafka;
-    }
-
-    @Scheduled(fixedDelay = 1000)
-    @Transactional
-    public void publishPendingEvents() {
-        List<OutboxEvent> events = outboxRepository.findByPublishedFalse();
-        for (OutboxEvent event : events) {
-            kafka.send(event.getAggregateType(), event.getAggregateId(), event.getPayload());
-            event.setPublished(true);
-        }
-    }
-}
+// A relay publishes unpublished outbox rows to Kafka afterwards and marks them once the broker acknowledged
 ```
+
+Never send to Kafka inside the business transaction. Events can arrive twice, so consumers are idempotent.
+
+Full implementation (outbox table, relay, topics, consumers, dead-letter topic): `event-driven` skill, `references/kafka.md`.
 
 ### Saga (Choreography)
 **Problem:** Distributed transaction across multiple microservices
@@ -422,90 +364,17 @@ public class PaymentEventHandler {
 **Problem:** Read and write models have different optimization needs
 
 ```java
-// ✅ CQRS - separate command and query models
+// ✅ CQRS - commands change the write model and produce events; queries read a model built from those events
 
-// Command side - normalized, validates business rules
-@Service
-@Transactional
-public class OrderCommandService {
-    private final OrderRepository orderRepository;
-    private final ApplicationEventPublisher eventPublisher;
+// Command side - one handler per command, validates business rules
+public record CreateOrderCommand(@NotNull Long customerId, @NotNull BigDecimal total) {}
 
-    public OrderCommandService(OrderRepository orderRepository,
-                                ApplicationEventPublisher eventPublisher) {
-        this.orderRepository = orderRepository;
-        this.eventPublisher = eventPublisher;
-    }
+// Event - carries the new state and the aggregate's version
+public record OrderCreated(Long orderId, long version, Long customerId, String status, BigDecimal total,
+                           Instant occurredAt) implements OrderEvent {}
 
-    public Long createOrder(CreateOrderCommand command) {
-        Order order = new Order();
-        order.setCustomerId(command.customerId());
-        order.setStatus(OrderStatus.CREATED);
-        command.items().forEach(order::addItem);
-        order = orderRepository.save(order);
-        eventPublisher.publishEvent(new OrderCreatedEvent(order));
-        return order.getId();
-    }
-}
-
-// Query side - denormalized, optimized for reads
-@Service
-@Transactional(readOnly = true)
-public class OrderQueryService {
-    private final OrderViewRepository viewRepository;
-
-    public OrderQueryService(OrderViewRepository viewRepository) {
-        this.viewRepository = viewRepository;
-    }
-
-    public OrderView findById(Long id) {
-        return viewRepository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException("Order not found"));
-    }
-
-    public Page<OrderView> findByCustomer(Long customerId, Pageable pageable) {
-        return viewRepository.findByCustomerId(customerId, pageable);
-    }
-}
-
-// Read model - flat, pre-joined
-@Entity
-@Table(name = "order_views")
-public class OrderView {
-    @Id
-    private Long id;
-    private Long customerId;
-    private String customerName;
-    private String status;
-    private BigDecimal totalAmount;
-    private int itemCount;
-    private LocalDateTime createdAt;
-
-    // getters/setters
-}
-
-// Projection updater - keeps query model in sync
-@Component
-public class OrderViewUpdater {
-
-    private final OrderViewRepository viewRepository;
-
-    public OrderViewUpdater(OrderViewRepository viewRepository) {
-        this.viewRepository = viewRepository;
-    }
-
-    @EventListener
-    public void on(OrderCreatedEvent event) {
-        OrderView view = new OrderView();
-        view.setId(event.order().getId());
-        view.setCustomerId(event.order().getCustomerId());
-        view.setStatus(event.order().getStatus().name());
-        view.setTotalAmount(event.order().getTotalAmount());
-        view.setItemCount(event.order().getItems().size());
-        view.setCreatedAt(event.order().getCreatedAt());
-        viewRepository.save(view);
-    }
-}
+// Query side - a projection updates a flat read model; handlers return records, never entities
+public record FindOrdersQuery(Long customerId, Pageable pageable) {}
 ```
 
 **When to use CQRS:**
@@ -513,7 +382,9 @@ public class OrderViewUpdater {
 - Read model needs different shape than write model (denormalized views)
 - Different scaling requirements for reads vs writes
 
-**When NOT to use:** Simple CRUD applications - adds unnecessary complexity.
+**When NOT to use:** Simple CRUD applications - adds unnecessary complexity, and reads become eventually consistent.
+
+The style is chosen once per project (`conventions` skill, "Architecture Decision"). Full rules and examples (handlers, events, projections, topology, Kafka or in-process events, tests): `event-driven` skill.
 
 ---
 

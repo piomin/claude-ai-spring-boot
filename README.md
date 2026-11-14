@@ -1,6 +1,6 @@
-# Spring Boot Plugin for Claude Code (v1.3.0)
+# Spring Boot Plugin for Claude Code (v1.4.0)
 
-A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
+A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, a selectable architecture style (layered CRUD or CQRS), JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
 
 ## Installation
 
@@ -66,8 +66,8 @@ Specialized agents that Claude Code can invoke for specific tasks:
 
 | Agent | Purpose |
 |-------|---------|
-| `spring-boot-engineer` | Build Spring Boot 4.x apps with layered architecture and Problem Details errors; adds the OpenAPI contract rules when the API is built for a UI |
-| `code-reviewer` | Read-only review of a diff or branch: fixes the scope, loads the `conventions` and `code-quality` skills, reports cited findings by severity |
+| `spring-boot-engineer` | Build Spring Boot 4.x apps with Problem Details errors, in the architecture style recorded for the project (layered CRUD by default, CQRS with the `event-driven` skill); adds the OpenAPI contract rules when the API is built for a UI |
+| `code-reviewer` | Read-only review of a diff or branch: fixes the scope, loads the `conventions` and `code-quality` skills (and `event-driven` for a CQRS project), reports cited findings by severity |
 | `kubernetes-specialist` | K8s deployments, probes, ConfigMap/Secret, Prometheus, Skaffold |
 | `devops-engineer` | CI/CD pipelines, Paketo Buildpacks, Skaffold |
 | `docker-expert` | Multi-stage Dockerfiles, Paketo Buildpacks, image optimization |
@@ -79,10 +79,11 @@ Reusable knowledge that Claude loads contextually:
 
 | Skill | What it teaches |
 |-------|-----------------|
-| `conventions` | Mandatory project rules: No Lombok, constructor injection, RestClient, testing standards, conditional Flyway for relational databases, Problem Details, conditional OpenAPI contract rules for APIs built for a UI |
+| `conventions` | The architecture decision for a new project (dialog, `## Architecture` block) and the mandatory project rules: No Lombok, constructor injection, RestClient, testing standards, conditional Flyway for relational databases, Problem Details, conditional OpenAPI contract rules for APIs built for a UI |
 | `spring-boot` | Core Spring Boot development with 7 reference guides (web incl. Problem Details and paging, OpenAPI with springdoc 3, data incl. Flyway migrations, security, cloud, Spring AI 2.x, testing) |
 | `code-quality` | Review checklist loaded on demand from 6 references (correctness, security, performance, Spring signals, REST semantics, code smells); points to `conventions` and other skills for project rules instead of repeating them |
-| `design-patterns` | Classic patterns (Factory, Builder, Strategy) + enterprise (Saga, Outbox, CQRS) |
+| `event-driven` | CQRS with 4 reference guides: topology (separate command and query services, or a single service), commands, queries, events and projections, transactional outbox with Kafka or in-process events with Spring Modulith, testing |
+| `design-patterns` | Classic patterns (Factory, Builder, Strategy) + enterprise (Saga, and short summaries of Outbox and CQRS that link to `event-driven`) |
 | `testing-patterns` | JUnit 5, Mockito, MockMvc, RestTestClient, Testcontainers with @ServiceConnection, relation and status-endpoint integration tests, Podman |
 | `java-modern` | Java 21+ features: records, sealed classes, pattern matching, virtual threads |
 | `jpa-patterns` | JPA/Hibernate pitfalls (N+1, lazy loading), Hibernate 6/7, optimistic locking across HTTP requests, relation writes with OSIV off, schema drift |
@@ -92,6 +93,7 @@ Reusable knowledge that Claude loads contextually:
 
 The plugin enforces these rules via the `conventions` skill:
 
+- **Architecture decision** — asked once for a new project and recorded in its `CLAUDE.md` (see below)
 - **No Lombok** — explicit constructors, getters/setters, `LoggerFactory.getLogger()`
 - **Constructor injection** — no `@Autowired` on fields
 - **RestClient** over RestTemplate/WebClient for blocking HTTP calls
@@ -130,7 +132,41 @@ claude
 > "Build a REST API for managing orders with PostgreSQL"
 ```
 
+In a new project, Claude first asks which architecture style to use (see "Architecture styles"); answer "Layered CRUD" for the classic controller, service and repository layout.
+
 For a relational database like PostgreSQL, the generated app includes Flyway migrations in `src/main/resources/db/migration`, `ddl-auto: validate`, and Testcontainers tests that verify all migrations were applied. APIs without persistence or with NoSQL stores get no Flyway configuration.
+
+### Architecture styles
+
+For a **new project** (no build file yet), Claude asks which architecture style to use before it writes code, even when the prompt does not mention architecture. The questions come one at a time, with the default first:
+
+| # | Question | Options | Asked when |
+|---|----------|---------|------------|
+| 1 | Architecture style | Layered CRUD / CQRS / CQRS + Event Sourcing | always |
+| 2 | Scope | Which aggregates or bounded contexts | style is not CRUD |
+| 3 | Topology | Separate command and query services / Single service | style is not CRUD |
+| 4 | Event transport | Apache Kafka / In-process events (Spring Modulith) | single service only |
+| 5 | Read model store | PostgreSQL / another store | style is not CRUD |
+
+The answer is written to the project's `CLAUDE.md` and followed in every later session without asking again:
+
+```markdown
+## Architecture
+style: cqrs
+scope: Order
+topology: separate-services
+transport: kafka
+read-store: postgresql
+```
+
+- **Layered CRUD** (default) generates what the plugin generated before; the block is the single line `style: layered-crud`.
+- **CQRS** loads the `event-driven` skill: command and query records with one handler each, a write side that keeps JPA, `@Version` and 409, read models updated from domain events, and a transactional outbox when events go through Kafka. Reads become eventually consistent: a query right after a command may return the old state.
+  - *Separate services:* a Maven multi-module build with `<name>-events`, `<name>-command-service` and `<name>-query-service`, each service with its own database and Flyway migrations.
+  - *Single service:* one module with `command`, `query`, `domain` and `projection` packages, and a test that keeps them extractable.
+- A prompt that already states the choices ("CQRS, single service, in-process events, PostgreSQL read model, for Order") gets a one-line confirmation instead of questions.
+- An **existing project** without the block is layered CRUD and is not asked, unless you request CQRS.
+
+Not yet supported, and answered as such in the dialog: **CQRS + Event Sourcing**, **Axon Framework**, and **CQRS for an API built for a UI**.
 
 ### APIs built for a UI
 
@@ -184,6 +220,13 @@ You can also invoke skills and agents directly:
 │   │       ├── smells.md
 │   │       └── spring-conventions.md
 │   ├── design-patterns/SKILL.md
+│   ├── event-driven/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   │       ├── cqrs.md
+│   │       ├── kafka.md
+│   │       ├── testing.md
+│   │       └── topology.md
 │   ├── java-modern/SKILL.md
 │   ├── jpa-patterns/SKILL.md
 │   ├── logging-patterns/SKILL.md
