@@ -14,6 +14,14 @@ The architecture block (`conventions` skill, "Architecture Decision") names the 
 
 Aggregates outside the `scope` of the architecture block stay layered CRUD. With separate services they do not belong in the command or the query service: keep them in their own service, or add them to the scope.
 
+**Event Sourcing** (`style: cqrs-event-sourcing`) uses the same packages, with these differences:
+
+- `<aggregate>.domain` holds a plain aggregate class with no JPA mapping and no repository (`event-sourcing.md`).
+- An `eventstore` package replaces `outbox`: `EventStore`, `StoredEvent`, `EventTypes`, `Upcaster`, and the projection subscriptions or the relay.
+- Separate services: the command service has no JPA; the query service has its own `StoredEvent`, `EventTypes` and upcasters. The `-events` module still holds event records only.
+- Single service: projections read the event store directly, so there is no Kafka and no transport question.
+- `ArchitectureTest` gets a third rule: nothing in `..domain..` depends on `jakarta.persistence..` or `org.springframework..`.
+
 ## Separate Command and Query Services (default)
 
 A Maven multi-module build. `<name>` is the parent directory name, as for any artifact (`conventions`).

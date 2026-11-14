@@ -451,4 +451,6 @@ For the `code-reviewer` agent, when the architecture block says `style: cqrs`. C
 | Event carrying an entity, a secret or personal data the read model does not use | Important | Events |
 | Handler calling another handler | Code smell | Command Handlers |
 
+With `style: cqrs-event-sourcing`, also apply the Review Signals of `event-sourcing.md`.
+
 Do not flag the missing service layer, or a controller that calls a handler directly: the architecture block is the documented decision.

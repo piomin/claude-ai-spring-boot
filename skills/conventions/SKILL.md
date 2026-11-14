@@ -34,9 +34,9 @@ The architecture block is a `## Architecture` section that has a `style:` line. 
 | 1 | Architecture style | Layered CRUD / CQRS / CQRS + Event Sourcing | always |
 | 2 | Scope | Which aggregates or bounded contexts | style is not CRUD |
 | 3 | Topology | Separate command and query services / Single service | style is not CRUD |
-| 4 | Event transport | Apache Kafka / In-process events (Spring Modulith) | single service only; separate services always use Kafka |
+| 4 | Event transport | Apache Kafka / In-process events (Spring Modulith) | style is CQRS and topology is single service; separate services always use Kafka, and an event-sourced single service reads its event store directly |
 | 5 | Read model store | PostgreSQL / another store named by the user | style is not CRUD |
-| 6 | Event store | PostgreSQL append-only table / Axon Framework | Event Sourcing (not yet supported) |
+| 6 | Event store | PostgreSQL append-only table / Axon Framework | style is Event Sourcing |
 
 With question 1, state the cost in two lines:
 
@@ -47,39 +47,43 @@ If the user picks layered CRUD, ask nothing else.
 
 **Not yet supported.** Reply "not yet supported in this version of the plugin" and ask again between the supported options. Never fall back silently:
 
-- **CQRS + Event Sourcing** and **Axon Framework**, whether picked in the dialog, stated in the prompt, or found as `style: cqrs-event-sourcing` in an existing block.
-- **CQRS for an API built for a UI** (see "REST API Built for a UI"): the UI contract expects one API that returns the full record on every write. Offer layered CRUD only.
+- **CQRS or Event Sourcing for an API built for a UI** (see "REST API Built for a UI"): the UI contract expects one API that returns the full record on every write. Offer layered CRUD only.
+
+**Axon Framework.** When the user picks it, the `event-driven` skill, `references/axon.md`, continues the dialog before any code: it selects the Axon version that fits the project's Spring Boot version, tells the user which one, and asks whether events are stored in Axon Server or in PostgreSQL.
 
 **Record the decision** before generating code. Create the file if the project has none, and keep the rest of an existing file:
 
     ## Architecture
-    style: cqrs
+    style: cqrs-event-sourcing
     scope: Order, Payment
     topology: separate-services
     transport: kafka
     read-store: postgresql
+    event-store: postgresql
 
 | Key | Values |
 |-----|--------|
-| `style` | `layered-crud`, `cqrs` (`cqrs-event-sourcing` is reserved) |
+| `style` | `layered-crud`, `cqrs`, `cqrs-event-sourcing` |
 | `scope` | aggregate or bounded context names |
 | `topology` | `separate-services`, `single-service` |
-| `transport` | `kafka`, `in-process` |
+| `transport` | `kafka`, `in-process` (always `in-process` for an event-sourced single service) |
 | `read-store` | `postgresql`, or the store the user named |
+| `event-store` | Event Sourcing only: `postgresql`, `axon` (then also `axon-version` and `axon-event-store`: `axon-server` or `postgresql`) |
 
 Layered CRUD is recorded as the single line `style: layered-crud`, so a subagent or a later session does not ask again. Record a decision only after the dialog ran: an existing project without the block is layered CRUD as it is, and gets no block added.
 
 **What each style replaces.** Every rule in this skill applies to every style, except:
 
-| Rule | Layered CRUD | CQRS |
-|------|--------------|------|
-| Layering and packages | Controller → Service → Repository (`spring-boot` skill, Architecture Patterns) | Controller → handler → repository, in `command`, `query`, `domain`, `projection` packages |
-| `@Transactional(readOnly = true)` at service class level | applies | `@Transactional` on command handlers, `@Transactional(readOnly = true)` on query handlers |
-| Request records | `<Resource>CreateRequest`, `<Resource>UpdateRequest` | command records (`Create<Resource>Command`, ...) |
-| What a write returns | the record (`<Resource>Response`) | `CommandResult` with the id and the new `version`; only queries return `<Resource>Response` |
-| Identity columns for ids | every table | write side only; a read-model table takes its id from the events |
+| Rule | Layered CRUD | CQRS | CQRS + Event Sourcing |
+|------|--------------|------|-----------------------|
+| Layering and packages | Controller → Service → Repository (`spring-boot` skill, Architecture Patterns) | Controller → handler → repository, in `command`, `query`, `domain`, `projection` packages | as CQRS; handlers use the event store, not a repository |
+| `@Transactional(readOnly = true)` at service class level | applies | `@Transactional` on command handlers, `@Transactional(readOnly = true)` on query handlers | as CQRS |
+| Request records | `<Resource>CreateRequest`, `<Resource>UpdateRequest` | command records (`Create<Resource>Command`, ...) | command records named after what the user does (`PayOrderCommand`) |
+| What a write returns | the record (`<Resource>Response`) | `CommandResult` with the id and the new `version`; only queries return `<Resource>Response` | as CQRS; 201 for a new aggregate, 202 for every other command |
+| JPA entities with `@Version`, 409 on a lost update | applies | applies on the write side | no JPA on the write side; a version conflict on append to the event store is the 409 |
+| Identity columns for ids | every table | write side only; a read-model table takes its id from the events | none; an aggregate id is a `UUID` created by the application |
 
-When the style is `cqrs`, load the `event-driven` skill and follow it. It holds the topology, the CQRS rules, Kafka and testing.
+When the style is `cqrs` or `cqrs-event-sourcing`, load the `event-driven` skill and follow it. It holds the topology, the CQRS and Event Sourcing rules, Axon, Kafka and testing.
 
 ## Mandatory Rules
 

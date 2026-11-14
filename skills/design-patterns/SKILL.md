@@ -384,7 +384,7 @@ public record FindOrdersQuery(Long customerId, Pageable pageable) {}
 
 **When NOT to use:** Simple CRUD applications - adds unnecessary complexity, and reads become eventually consistent.
 
-The style is chosen once per project (`conventions` skill, "Architecture Decision"). Full rules and examples (handlers, events, projections, topology, Kafka or in-process events, tests): `event-driven` skill.
+The style is chosen once per project (`conventions` skill, "Architecture Decision"). Full rules and examples (handlers, events, projections, topology, Kafka or in-process events, tests), and Event Sourcing on top of CQRS: `event-driven` skill.
 
 ---
 

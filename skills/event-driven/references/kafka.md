@@ -232,6 +232,144 @@ public class KafkaConsumerConfig {
 
 This is how a new read model, or a changed one, is filled. It works only because the topic has no retention limit.
 
+## Event Sourcing: the Event Store Is the Outbox
+
+For `style: cqrs-event-sourcing` with separate services (`event-sourcing.md`). Events are already stored in the command's transaction, so there is no `outbox_event` table: a relay publishes the event store in the order of its global sequence and keeps its position in a checkpoint row. Topics, producer settings, the error handler and the dead-letter topic are as above.
+
+```sql
+-- Command service: position of the relay that publishes the event store to Kafka
+CREATE TABLE relay_checkpoint (
+    name     VARCHAR(100) NOT NULL,
+    position BIGINT       NOT NULL DEFAULT 0,
+    CONSTRAINT pk_relay_checkpoint PRIMARY KEY (name)
+);
+
+INSERT INTO relay_checkpoint (name) VALUES ('kafka-relay');
+```
+
+```java
+/**
+ * The only class that publishes to Kafka. The event store is the outbox: the relay sends the events
+ * after its checkpoint in order and moves the checkpoint once the broker acknowledged them.
+ */
+@Component
+public class EventRelay {
+
+    public static final String EVENT_TYPE = "event-type";
+    public static final String STREAM_VERSION = "stream-version";
+    public static final String GLOBAL_SEQ = "global-seq";
+    public static final String OCCURRED_AT = "occurred-at";
+
+    record Row(long globalSeq, String streamId, String streamType, long version, String eventType, String payload,
+               String occurredAt) {
+    }
+
+    private final JdbcClient jdbc;
+    private final KafkaTemplate<String, String> kafka;
+
+    public EventRelay(JdbcClient jdbc, KafkaTemplate<String, String> kafka) {
+        this.jdbc = jdbc;
+        this.kafka = kafka;
+    }
+
+    @Scheduled(fixedDelayString = "${relay.delay:200ms}")
+    @Transactional
+    public void publish() throws Exception {
+        // SKIP LOCKED: only one replica relays at a time, so the order is kept
+        Optional<Long> position = jdbc.sql("SELECT position FROM relay_checkpoint WHERE name = 'kafka-relay' FOR UPDATE SKIP LOCKED")
+                .query(Long.class).optional();
+        if (position.isEmpty()) {
+            return;
+        }
+        List<Row> rows = jdbc.sql("""
+                        SELECT global_seq, stream_id::text AS stream_id, stream_type, version, event_type,
+                               payload::text AS payload, to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
+                        FROM event_store WHERE global_seq > :position ORDER BY global_seq LIMIT 100
+                        """)
+                .param("position", position.get()).query(Row.class).list();
+        for (Row row : rows) {
+            // one topic per aggregate type, key = aggregate id
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic(row.streamType()), row.streamId(), row.payload());
+            header(record, EVENT_TYPE, row.eventType());
+            header(record, STREAM_VERSION, String.valueOf(row.version()));
+            header(record, GLOBAL_SEQ, String.valueOf(row.globalSeq()));
+            header(record, OCCURRED_AT, row.occurredAt());
+            kafka.send(record).get(10, TimeUnit.SECONDS);   // wait for the broker's acknowledgement
+        }
+        if (!rows.isEmpty()) {
+            jdbc.sql("UPDATE relay_checkpoint SET position = :position WHERE name = 'kafka-relay'")
+                    .param("position", rows.getLast().globalSeq()).update();
+        }
+    }
+
+    private static String topic(String streamType) {
+        return streamType.toLowerCase() + "-events";
+    }
+
+    private static void header(ProducerRecord<String, String> record, String name, String value) {
+        record.headers().add(name, value.getBytes(StandardCharsets.UTF_8));
+    }
+}
+```
+
+- The relay sends the stored payload as it is, with the stored type name. It does not upcast: the topic holds what the store holds.
+- The payload is the `jsonb` column as text, which PostgreSQL writes with a space after every colon and comma (`{"customerId": 7}`). A test parses it or asserts on values, never on an exact JSON string.
+- The message carries what `StoredEvent` needs in headers: `event-type`, `stream-version`, `global-seq`, `occurred-at`. The key is the stream id.
+- The topic is still not the event store. It keeps events without a retention limit only so that the query service can rebuild its projections.
+
+The query service turns a record back into a `StoredEvent` and gives it to the projection:
+
+```java
+@KafkaListener(topics = OrderEvent.TOPIC)
+public void on(ConsumerRecord<String, String> record) {
+    String type = header(record, "event-type");
+    if (!eventTypes.knows(type)) {
+        log.atWarn().addKeyValue("eventType", type).addKeyValue("offset", record.offset()).log("Unknown event type skipped");
+        return;
+    }
+    OrderEvent event = (OrderEvent) eventTypes.deserialize(type, record.value());
+    projection.apply(new StoredEvent<>(Long.parseLong(header(record, "global-seq")), UUID.fromString(record.key()),
+            Long.parseLong(header(record, "stream-version")), event, Instant.parse(header(record, "occurred-at"))),
+            record.partition());
+}
+
+private static String header(ConsumerRecord<String, String> record, String name) {
+    return new String(record.headers().lastHeader(name).value(), StandardCharsets.UTF_8);
+}
+```
+
+```sql
+-- Query service, per projection and topic partition: the global sequence of the last event applied
+CREATE TABLE projection_checkpoint (
+    name         VARCHAR(100) NOT NULL,
+    partition_id INT          NOT NULL,
+    position     BIGINT       NOT NULL,
+    CONSTRAINT pk_projection_checkpoint PRIMARY KEY (name, partition_id)
+);
+```
+
+```java
+@Transactional
+public void apply(StoredEvent<OrderEvent> stored, int partition) {
+    int moved = jdbc.sql("""
+                    INSERT INTO projection_checkpoint (name, partition_id, position) VALUES (:name, :partition, :position)
+                    ON CONFLICT (name, partition_id) DO UPDATE SET position = EXCLUDED.position
+                    WHERE projection_checkpoint.position < EXCLUDED.position
+                    """)
+            .param("name", NAME).param("partition", partition).param("position", stored.globalSeq())
+            .update();
+    if (moved == 0) {
+        return;   // already applied
+    }
+    // update the read model, as in event-sourcing.md (Projections)
+}
+```
+
+- The checkpoint moves in the transaction that updates the read model, so a redelivered event is skipped. The position is kept per partition because the global sequence only grows within one partition.
+- The query service has its own copies of `StoredEvent`, `EventTypes` and the upcasters (`event-sourcing.md`). The `-events` module holds records only.
+- A record on the dead-letter topic leaves that aggregate's read model behind, and later events of the same aggregate may fail too. Fix the cause, then rebuild the projection.
+- **Rebuild:** as in "Rebuilding a Projection", and also delete the projection's rows in `projection_checkpoint`.
+
 ## Local Kafka (Docker Compose)
 
 ```yaml

@@ -28,6 +28,7 @@ Read only the references that match the changed files.
 | Entities, `*.sql` migrations, `spring.jpa.*`, Flyway | `conventions` → Relational Database Schema (Flyway); `spring-boot` → `references/data.md` |
 | Any non-trivial logic | `references/smells.md` |
 | Any code in a project whose architecture block says `style: cqrs` (`conventions` → Architecture Decision): handlers, events, projections, outbox, Kafka listeners | `event-driven` → `references/cqrs.md` (Review Signals), and `references/kafka.md` when the diff touches the outbox or a listener |
+| Any code in a project whose architecture block says `style: cqrs-event-sourcing`: aggregates, events, upcasters, event store, projections, migrations | `event-driven` → `references/cqrs.md` and `references/event-sourcing.md` (Review Signals); `references/axon.md` with `event-store: axon` |
 | `deploy/**`, `skaffold.yaml`, `docker-compose.yml`, Kubernetes manifests | `spring-boot` → `references/cloud.md` (overlays, probes, Compose healthchecks); `references/security.md` (secrets) |
 
 Related skills, loaded only when the diff needs them:
@@ -40,7 +41,7 @@ Related skills, loaded only when the diff needs them:
 | Log levels, MDC, structured logging | `logging-patterns` |
 | UI contract details | `spring-boot` → `references/ui-contract.md` |
 | Records, sealed types, pattern matching | `java-modern` |
-| CQRS: handlers, events, outbox, projections | `event-driven` |
+| CQRS and Event Sourcing: handlers, events, outbox, event store, projections | `event-driven` |
 
 ## Severity
 

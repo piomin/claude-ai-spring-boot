@@ -9,6 +9,6 @@
   "homepage": "https://piotrminkowski.com/2026/03/24/claude-code-template-for-spring-boot/",
   "repository": "https://github.com/piomin/claude-ai-spring-boot",
   "license": "Apache-2.0",
-  "keywords": ["spring-boot", "java", "maven", "jpa", "testing", "cqrs", "kafka", "kubernetes"],
+  "keywords": ["spring-boot", "java", "maven", "jpa", "testing", "cqrs", "event-sourcing", "kafka", "kubernetes"],
   "skills": "./skills/"
 }

@@ -18,7 +18,7 @@ Enterprise Spring Boot 4.x development with focus on clean architecture and prod
 
 1. **Analyze** - Understand requirements, identify service boundaries, APIs, data models
 2. **Design** - Find or ask for the architecture decision (`conventions` skill, "Architecture Decision"), plan the architecture, confirm the design before coding
-3. **Implement** - Build with constructor injection and layered architecture (`style: cqrs`: the `event-driven` skill instead of the layering below); for a relational database, write Flyway migrations alongside entities (`ddl-auto: validate`)
+3. **Implement** - Build with constructor injection and layered architecture (`style: cqrs` or `cqrs-event-sourcing`: the `event-driven` skill instead of the layering below); for a relational database, write Flyway migrations alongside entities (`ddl-auto: validate`)
 4. **Secure** - Add Spring Security, OAuth2, method security; verify tests pass
 5. **Test** - Write unit, integration tests; run `./mvnw clean verify` and confirm all pass, with integration tests running (not skipped)
 6. **Deploy** - Configure health checks via Actuator; validate `/actuator/health` returns UP and `/actuator/info` shows `build.version`
@@ -226,7 +226,7 @@ Load detailed patterns based on context:
 
 ## Architecture Patterns
 
-Structure and layering below are for layered CRUD, the default style. A project whose `CLAUDE.md` says `style: cqrs` follows the `event-driven` skill, `references/topology.md`, instead.
+Structure and layering below are for layered CRUD, the default style. A project whose `CLAUDE.md` says `style: cqrs` or `style: cqrs-event-sourcing` follows the `event-driven` skill, `references/topology.md`, instead.
 
 **Project Structure:**
 ```

@@ -309,6 +309,141 @@ class OrderEndToEndTest {
 - With Spring Modulith, assert that no publication is left unfinished: `SELECT count(*) FROM command.event_publication WHERE completion_date IS NULL` reaches zero.
 - `@DirtiesContext(AFTER_CLASS)` closes the application before the JVM stops. Spring Modulith reads its publication table on shutdown; when the containers are stopped by a JVM shutdown hook (Podman with `TESTCONTAINERS_RYUK_DISABLED=true`), the database can be gone first and the build then waits 30 seconds per module.
 
+## Event Sourcing
+
+For `style: cqrs-event-sourcing` (`event-sourcing.md`). The integration and end-to-end tests above apply with the event store in place of the outbox; these are added.
+
+| What | Kind of test | Needs |
+|------|--------------|-------|
+| Aggregate rules | Unit test: given events, when command, then events | nothing |
+| Event store | Integration test | PostgreSQL |
+| Upcasters | Integration test with a stored old payload | PostgreSQL |
+| Projection rebuild | End-to-end test | PostgreSQL |
+
+### Aggregate: Given, When, Then
+
+Plain unit tests, no Spring context and no mocks: given the past events, when a command, then the expected events or a rejection. They are the main tests of the business rules.
+
+```java
+/** Given past events, when a command, then the expected events. No Spring context. */
+class OrderTest {
+
+    private static final OrderPlaced PLACED = new OrderPlaced(7L, new BigDecimal("10.00"));
+
+    @Test
+    void place_validOrder_returnsOrderPlaced() {
+        assertThat(Order.place(7L, new BigDecimal("10.00"))).containsExactly(PLACED);
+    }
+
+    @Test
+    void pay_placedOrder_returnsOrderPaid() {
+        Order order = Order.replay(List.of(PLACED));
+
+        assertThat(order.pay()).containsExactly(new OrderPaid());
+    }
+
+    @Test
+    void pay_paidOrder_isRejected() {
+        Order order = Order.replay(List.of(PLACED, new OrderPaid()));
+
+        assertThatThrownBy(order::pay).isInstanceOf(DomainRuleException.class);
+    }
+}
+```
+
+Every command has at least one accepted and one rejected case. Records compare by value, so the expected events are written out in full.
+
+### Event Store and Upcasters
+
+```java
+@SpringBootTest
+@Import({TestcontainersConfig.class, EventStoreIntegrationTest.Upcasters.class})
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+class EventStoreIntegrationTest {
+
+    /** An old event type "OrderDrafted" (no total) is read as OrderPlaced with total 0. */
+    @TestConfiguration
+    static class Upcasters {
+        @Bean
+        Upcaster orderDrafted() {
+            return new Upcaster() {
+                public String fromType() { return "OrderDrafted"; }
+                public String toType() { return "OrderPlaced"; }
+                public ObjectNode upcast(ObjectNode payload) { return payload.put("total", 0); }
+            };
+        }
+    }
+
+    @Autowired
+    EventStore eventStore;
+
+    @Autowired
+    TransactionTemplate tx;
+
+    @Autowired
+    JdbcClient jdbc;
+
+    @Test
+    void appendAndLoad_returnsEventsInOrderWithVersions() {
+        UUID id = UUID.randomUUID();
+        OrderPlaced placed = new OrderPlaced(7L, new BigDecimal("10.00"));
+
+        long version = tx.execute(s -> eventStore.append("Order", id, 0, List.of(placed, new OrderPaid()), Map.of()));
+
+        assertThat(version).isEqualTo(2);
+        List<StoredEvent<OrderEvent>> stream = eventStore.load(id, OrderEvent.class);
+        assertThat(stream).extracting(StoredEvent::event).containsExactly(placed, new OrderPaid());
+        assertThat(stream).extracting(StoredEvent::version).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void append_staleExpectedVersion_throwsAndStoresNothing() {
+        UUID id = UUID.randomUUID();
+        tx.execute(s -> eventStore.append("Order", id, 0, List.of(new OrderPlaced(7L, BigDecimal.ONE)), Map.of()));
+
+        assertThatThrownBy(() -> tx.execute(s -> eventStore.append("Order", id, 0, List.of(new OrderPaid()), Map.of())))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+        assertThat(eventStore.load(id, OrderEvent.class)).hasSize(1);
+    }
+
+    @Test
+    void storedEvents_cannotBeChangedOrDeleted() {
+        UUID id = UUID.randomUUID();
+        tx.execute(s -> eventStore.append("Order", id, 0, List.of(new OrderPlaced(7L, BigDecimal.ONE)), Map.of()));
+
+        assertThatThrownBy(() -> jdbc.sql("UPDATE event_store SET event_type = 'X' WHERE stream_id = ?").param(id).update())
+                .isInstanceOf(DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.sql("DELETE FROM event_store WHERE stream_id = ?").param(id).update())
+                .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void load_oldEventType_isUpcast() {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO event_store (stream_id, stream_type, version, event_type, payload, metadata, occurred_at)
+                VALUES (?, 'Order', 1, 'OrderDrafted', '{"customerId": 7}', '{}', now())
+                """).param(id).update();
+
+        assertThat(eventStore.load(id, OrderEvent.class)).extracting(StoredEvent::event)
+                .containsExactly(new OrderPlaced(7L, BigDecimal.ZERO));
+    }
+}
+```
+
+- The round trip asserts a decimal with its scale (`10.00`): it catches a deserializer that goes through `double`.
+- Every real upcaster gets a test like `load_oldEventType_isUpcast`, with a payload copied from the old version.
+- The event store's tests clean nothing up: rows cannot be deleted, so every test uses a new `UUID`.
+
+### Commands, Projections and Rebuild
+
+- Command endpoints: 201 for the creating command, 202 for the others, 409 for a stale `version` and for a broken rule, 404 for an unknown id. After a rejected command the stream has no new event (`SELECT count(*) FROM event_store WHERE stream_id = ?`).
+- Wait for the read model by its `version`, then assert over HTTP, as in "Awaiting the Read Model".
+- Rebuild: call the projection's `rebuild()`, wait, and assert that the read model is the same as before.
+- Separate services: the command service's test reads the topic and asserts the `event-type`, `stream-version` and `global-seq` headers and the order of the events; the query service's test publishes records with those headers and covers a redelivered record (same `global-seq`), an unknown event type, and a broken payload on the dead-letter topic.
+- A class with a scheduled projection or relay gets `@DirtiesContext(AFTER_CLASS)`, for the reason given under "Single Service: End to End".
+
 ## Running
 
 `./mvnw clean verify` at the root, as in `testing-patterns` (including the Podman settings). Check that the integration tests ran and were not skipped: every module that has them needs a container engine.

@@ -1,6 +1,6 @@
 # Spring Boot Plugin for Claude Code (v1.4.0)
 
-A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, a selectable architecture style (layered CRUD or CQRS), JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
+A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, a selectable architecture style (layered CRUD, CQRS, or CQRS with Event Sourcing), JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
 
 ## Installation
 
@@ -66,8 +66,8 @@ Specialized agents that Claude Code can invoke for specific tasks:
 
 | Agent | Purpose |
 |-------|---------|
-| `spring-boot-engineer` | Build Spring Boot 4.x apps with Problem Details errors, in the architecture style recorded for the project (layered CRUD by default, CQRS with the `event-driven` skill); adds the OpenAPI contract rules when the API is built for a UI |
-| `code-reviewer` | Read-only review of a diff or branch: fixes the scope, loads the `conventions` and `code-quality` skills (and `event-driven` for a CQRS project), reports cited findings by severity |
+| `spring-boot-engineer` | Build Spring Boot 4.x apps with Problem Details errors, in the architecture style recorded for the project (layered CRUD by default, CQRS or Event Sourcing with the `event-driven` skill); adds the OpenAPI contract rules when the API is built for a UI |
+| `code-reviewer` | Read-only review of a diff or branch: fixes the scope, loads the `conventions` and `code-quality` skills (and `event-driven` for a CQRS or event-sourced project), reports cited findings by severity |
 | `kubernetes-specialist` | K8s deployments, probes, ConfigMap/Secret, Prometheus, Skaffold |
 | `devops-engineer` | CI/CD pipelines, Paketo Buildpacks, Skaffold |
 | `docker-expert` | Multi-stage Dockerfiles, Paketo Buildpacks, image optimization |
@@ -82,7 +82,7 @@ Reusable knowledge that Claude loads contextually:
 | `conventions` | The architecture decision for a new project (dialog, `## Architecture` block) and the mandatory project rules: No Lombok, constructor injection, RestClient, testing standards, conditional Flyway for relational databases, Problem Details, conditional OpenAPI contract rules for APIs built for a UI |
 | `spring-boot` | Core Spring Boot development with 7 reference guides (web incl. Problem Details and paging, OpenAPI with springdoc 3, data incl. Flyway migrations, security, cloud, Spring AI 2.x, testing) |
 | `code-quality` | Review checklist loaded on demand from 6 references (correctness, security, performance, Spring signals, REST semantics, code smells); points to `conventions` and other skills for project rules instead of repeating them |
-| `event-driven` | CQRS with 4 reference guides: topology (separate command and query services, or a single service), commands, queries, events and projections, transactional outbox with Kafka or in-process events with Spring Modulith, testing |
+| `event-driven` | CQRS and Event Sourcing with 6 reference guides: topology (separate command and query services, or a single service), CQRS (commands, queries, events, projections), Event Sourcing (PostgreSQL event store, aggregates rebuilt from events, upcasting, projections with checkpoints), Axon Framework, Kafka (transactional outbox, relay, consumers) or in-process events with Spring Modulith, testing |
 | `design-patterns` | Classic patterns (Factory, Builder, Strategy) + enterprise (Saga, and short summaries of Outbox and CQRS that link to `event-driven`) |
 | `testing-patterns` | JUnit 5, Mockito, MockMvc, RestTestClient, Testcontainers with @ServiceConnection, relation and status-endpoint integration tests, Podman |
 | `java-modern` | Java 21+ features: records, sealed classes, pattern matching, virtual threads |
@@ -145,8 +145,9 @@ For a **new project** (no build file yet), Claude asks which architecture style 
 | 1 | Architecture style | Layered CRUD / CQRS / CQRS + Event Sourcing | always |
 | 2 | Scope | Which aggregates or bounded contexts | style is not CRUD |
 | 3 | Topology | Separate command and query services / Single service | style is not CRUD |
-| 4 | Event transport | Apache Kafka / In-process events (Spring Modulith) | single service only |
+| 4 | Event transport | Apache Kafka / In-process events (Spring Modulith) | CQRS as a single service only |
 | 5 | Read model store | PostgreSQL / another store | style is not CRUD |
+| 6 | Event store | PostgreSQL append-only table / Axon Framework | style is Event Sourcing |
 
 The answer is written to the project's `CLAUDE.md` and followed in every later session without asking again:
 
@@ -163,10 +164,18 @@ read-store: postgresql
 - **CQRS** loads the `event-driven` skill: command and query records with one handler each, a write side that keeps JPA, `@Version` and 409, read models updated from domain events, and a transactional outbox when events go through Kafka. Reads become eventually consistent: a query right after a command may return the old state.
   - *Separate services:* a Maven multi-module build with `<name>-events`, `<name>-command-service` and `<name>-query-service`, each service with its own database and Flyway migrations.
   - *Single service:* one module with `command`, `query`, `domain` and `projection` packages, and a test that keeps them extractable.
+- **CQRS + Event Sourcing** stores events instead of the current state (`style: cqrs-event-sourcing`, `event-store: postgresql`):
+  - an append-only `event_store` table owned by Flyway; a version conflict on append returns 409
+  - aggregates without JPA: state is rebuilt from the events, and a command returns new events
+  - events are never changed; an old event is read through an upcaster
+  - projections track their position and can be rebuilt; no snapshots unless a load problem is measured
+  - no personal data in events without an erasure strategy in the project's README
+  - command endpoints return 201 or 202 with the aggregate id and its version
+- **Axon Framework** (`event-store: axon`) replaces the hand-written event store, command dispatch and projection tracking. Claude first selects the Axon release that supports the project's Spring Boot version, tells you which one, and asks whether events go to Axon Server or to PostgreSQL. The code follows the Axon reference of that version.
 - A prompt that already states the choices ("CQRS, single service, in-process events, PostgreSQL read model, for Order") gets a one-line confirmation instead of questions.
 - An **existing project** without the block is layered CRUD and is not asked, unless you request CQRS.
 
-Not yet supported, and answered as such in the dialog: **CQRS + Event Sourcing**, **Axon Framework**, and **CQRS for an API built for a UI**.
+Not yet supported, and answered as such in the dialog: **CQRS or Event Sourcing for an API built for a UI**.
 
 ### APIs built for a UI
 
@@ -223,7 +232,9 @@ You can also invoke skills and agents directly:
 │   ├── event-driven/
 │   │   ├── SKILL.md
 │   │   └── references/
+│   │       ├── axon.md
 │   │       ├── cqrs.md
+│   │       ├── event-sourcing.md
 │   │       ├── kafka.md
 │   │       ├── testing.md
 │   │       └── topology.md

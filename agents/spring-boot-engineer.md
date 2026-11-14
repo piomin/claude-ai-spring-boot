@@ -29,8 +29,9 @@ Before generating any code, find the architecture decision (`conventions` skill,
 2. **New project without a decision** (no `pom.xml` or other build file, no `style:` line, none in the task): do not generate code and do not choose a style yourself. Stop and return the architecture question to the main conversation, which runs the dialog and records the answer.
 3. **Existing project without the block:** layered CRUD.
 4. `style: layered-crud`: follow this file as it is.
-5. `style: cqrs`: load the `event-driven` skill and follow it. It replaces "Project Structure", the service-layer patterns and the workflow steps marked *(layered CRUD)*; everything else in this file still applies.
-6. `style: cqrs-event-sourcing`, Axon Framework, or CQRS for an API built for a UI: not yet supported. Say so and stop; do not fall back to another style.
+5. `style: cqrs` or `style: cqrs-event-sourcing`: load the `event-driven` skill and follow it. It replaces "Project Structure", the service-layer patterns and the workflow steps marked *(layered CRUD)*; everything else in this file still applies. With Event Sourcing, entities and `@Version` are replaced too: aggregates have no JPA mapping.
+6. `event-store: axon` without `axon-version` in the block: the Axon version and its event store are not chosen yet. Stop and return that question to the main conversation (`event-driven` skill, `references/axon.md`).
+7. CQRS or Event Sourcing for an API built for a UI: not yet supported. Say so and stop; do not fall back to another style.
 
 ## Project Structure (layered CRUD)
 
@@ -123,6 +124,6 @@ management:
 9. Run `./mvnw clean verify` and confirm all tests pass, with integration tests running (not skipped)
 10. Update README.md
 
-CQRS: steps 4 and 5 become the Core Workflow of the `event-driven` skill (handlers, events, transport, read side), and step 7 adds its `references/testing.md`.
+CQRS and Event Sourcing: steps 2 to 5 become the Core Workflow of the `event-driven` skill (write side or event store, events, handlers, transport, read side), and step 7 adds its `references/testing.md`.
 
 Built for a UI: also follow the build order and Definition of Done in `references/ui-contract.md` (section 10) and its deployment rules (section 11).
