@@ -571,6 +571,101 @@ spec:
   type: ClusterIP
 ```
 
+### Stack Dependencies in the Same Namespace (PostgreSQL, Keycloak)
+
+When the API's own database and identity provider are deployed next to it, give them the same three probes as the API. Otherwise a redeploy routes traffic to a pod that is not ready yet, or the API connects before the database listens.
+
+```yaml
+# PostgreSQL: data on a PVC; pg_isready over TCP (during the first initdb the server listens only on the Unix socket)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  strategy:
+    type: Recreate            # ReadWriteOnce: the old pod releases the volume before the new one mounts it
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef: { name: postgres, key: database }
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: postgres, key: username }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: postgres, key: password }
+          startupProbe:         # every 2 s, so the database is ready before the API's first connection
+            exec:
+              command: ["sh", "-c", 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql      # postgres:18 and later; /var/lib/postgresql/data before 18
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres
+```
+
+Without a volume, every `skaffold run` or `kubectl apply` that replaces the pod starts with an empty database.
+
+```yaml
+# Keycloak: health endpoints are off by default and live on the management port 9000, not 8080
+env:
+  - name: KC_HEALTH_ENABLED
+    value: "true"
+  - name: KC_PROXY_HEADERS          # behind a Route/Ingress/proxy: build https URLs from X-Forwarded-*
+    value: xforwarded
+startupProbe:                       # start plus realm import takes about 30 s
+  httpGet: { path: /health/started, port: 9000 }
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  failureThreshold: 24
+readinessProbe:                     # without it, token requests fail for seconds after every redeploy
+  httpGet: { path: /health/ready, port: 9000 }
+  periodSeconds: 5
+livenessProbe:
+  httpGet: { path: /health/live, port: 9000 }
+  periodSeconds: 10
+```
+
+Do not set `KC_HOSTNAME` when the public host is generated (an OpenShift Route without `spec.host`). Keycloak then builds every URL, the token issuer included, from the host the request came through. The API validates tokens against the JWK set inside the cluster (`http://keycloak:8080/realms/<realm>/protocol/openid-connect/certs`), not through the public host.
+
+**Prove a probe can fail.** A probe or healthcheck that always passes is worse than none. After adding one, watch the service start: the probe must report failures before the service is up (`kubectl get events --field-selector type=Warning`, or `podman inspect --format '{{json .State.Health}}' <container>`), and the pods that depend on it must show no restarts.
+
 ### Ingress TLS with cert-manager
 
 cert-manager automatically provisions and renews TLS certificates on Kubernetes.
@@ -819,42 +914,118 @@ Advantages over Dockerfile:
 - Optimized layering (dependencies cached separately from app code)
 - Supported by Spring Boot Maven plugin out of the box
 
-## Local K8s Development with Skaffold
+### Docker Compose Healthchecks for Local Dependencies
 
-Skaffold automates the build → push → deploy loop.
+Give PostgreSQL and Keycloak healthchecks, so `docker compose up -d --wait` returns only once they are usable:
+
+```yaml
+services:
+  postgres:
+    image: postgres:18
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "app", "-d", "app"]
+      interval: 5s
+      start_period: 10s
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_HEALTH_ENABLED: "true"
+    healthcheck:
+      # The image has no curl: ask /health/ready on the management port 9000 through bash's /dev/tcp.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      start_period: 60s
+```
+
+Write a shell healthcheck as `["CMD-SHELL", "<script>"]`, never `["CMD", "bash", "-c", "<script>"]`. Podman splits that array on spaces, runs `bash -c exec`, and reports the service healthy before it has started.
+
+## Kubernetes and OpenShift with Skaffold and Kustomize Overlays
+
+One set of manifests deploys to a local cluster, any Kubernetes and OpenShift. Nothing in git names a cluster, host, registry, namespace or secret value: what differs per environment comes from an overlay or a Skaffold flag.
+
+```
+deploy/
+  base/                   plain Kubernetes, valid anywhere: Deployments, Services, ConfigMaps, PVCs, probes,
+                          resources, app.kubernetes.io/* labels. No Route, Ingress, host, registry or secret value.
+  overlays/
+    local/                default: kind, minikube, Docker Desktop (port forwarding)
+    openshift/            + Routes without spec.host (OpenShift generates one), Topology labels
+    kubernetes/           + Ingresses without host (an environment overlay sets it)
+  environments/
+    example/              committed: how an environment overlay looks
+    <env>/                git-ignored (deploy/environments/* with !deploy/environments/example/): host, TLS, settings
+  ensure-secrets.sh       Skaffold before-deploy hook: creates missing Secrets
+skaffold.yaml
+```
+
+- An overlay starts from `../../base` and adds only what its target needs. An environment overlay starts from one overlay and patches only what that environment needs.
+- Use only kustomize features that Skaffold's kustomize, `kubectl -k` and `oc -k` all support (kustomize 3.8): `resources`, `patches` (a file, or inline JSON 6902 with `target`), `configMapGenerator`, `secretGenerator`. Do not use `labels`, `replacements` or `components`; write labels on the objects.
+- Never put `namespace:` in a manifest or kustomization: it comes from `-n` or the current context.
+- Selectors stay `app: <name>`. A selector cannot be changed later, so never add labels to it.
+- Runtime settings live in a ConfigMap in `base`, with defaults that hold inside any cluster (Service names, not hosts).
+- Secrets are referenced by name only. The before-deploy hook creates each missing one with a random value (`openssl rand -hex 16`) in the deploy's namespace and context (`$SKAFFOLD_NAMESPACES`, `$SKAFFOLD_KUBE_CONTEXT`). It never changes an existing Secret, because PostgreSQL keeps the password of its first start. An environment with its own secret management creates them before the first deploy.
 
 ```yaml
 # skaffold.yaml
-apiVersion: skaffold/v4beta11
+apiVersion: skaffold/v4beta13
 kind: Config
 metadata:
   name: user-service
 build:
   artifacts:
-  - image: user-service
-    custom:
-      buildCommand: |
-        ./mvnw spring-boot:build-image \
-          -Dspring-boot.build-image.imageName=$IMAGE -q
-      dependencies:
-        paths:
-        - src/**
-        - pom.xml
+    - image: user-service          # bare name in the manifests; the registry comes only from --default-repo
+      jib: {}                      # no container engine needed; or buildpacks / spring-boot:build-image
+  tagPolicy:
+    gitCommit: {}
+manifests:
+  kustomize:
+    paths:
+      - '{{ default "deploy/overlays/local" .DEPLOY_OVERLAY }}'
 deploy:
   kubectl:
-    manifests:
-    - k8s/*.yaml
+    hooks:
+      before:
+        - host:
+            command: ["sh", "deploy/ensure-secrets.sh"]
+            os: [darwin, linux]
+portForward:                       # local profile only
+  - resourceType: service
+    resourceName: user-service
+    port: 8080
+    localPort: 8080
+profiles:
+  - name: openshift
+    patches:
+      - op: replace
+        path: /manifests/kustomize/paths/0
+        value: '{{ default "deploy/overlays/openshift" .DEPLOY_OVERLAY }}'
+      - op: remove
+        path: /portForward
+  - name: kubernetes
+    patches:
+      - op: replace
+        path: /manifests/kustomize/paths/0
+        value: '{{ default "deploy/overlays/kubernetes" .DEPLOY_OVERLAY }}'
+      - op: remove
+        path: /portForward
 ```
 
 ```bash
-# Continuous development - rebuild and redeploy on code changes
-skaffold dev
+skaffold dev                                                              # local cluster, watch loop
+skaffold run -p openshift --default-repo=quay.io/<org> -n <namespace>     # or -p kubernetes
+DEPLOY_OVERLAY=deploy/environments/<env> skaffold run -p openshift ...    # an environment overlay
+skaffold delete -p openshift -n <namespace>
+```
 
-# One-time build + deploy
-skaffold run
+Advise for the target platform, not the local default. Before giving deployment steps, check the target (`kubectl config current-context`; on OpenShift `oc whoami --show-server`). On OpenShift, services are exposed through Routes with `-p openshift`; port forwarding fits only a local cluster.
 
-# Deploy to specific profile/environment
-skaffold run -p production
+CI renders every overlay and the example environment, so a broken patch fails the build, not the deploy:
+
+```bash
+for dir in deploy/overlays/* deploy/environments/example; do
+  echo "== $dir"; kustomize build "$dir" > /dev/null
+done
 ```
 
 ## Quick Reference
@@ -872,7 +1043,7 @@ skaffold run -p production
 | **HTTP Interfaces** | Declarative HTTP clients (replaces Feign) |
 | **Native Image** | Fast startup, low memory with GraalVM |
 | **Paketo Buildpacks** | Build OCI images without Dockerfile (Spring Boot plugin) |
-| **Skaffold** | Local Kubernetes development loop (build → deploy → watch) |
+| **Skaffold + Kustomize** | Build and deploy one set of manifests to local, Kubernetes and OpenShift through overlays |
 | **Config Tree** | Read secrets from mounted files instead of env vars |
 | **cert-manager** | Automatic TLS certificate provisioning and renewal on K8s |
 | **SSL Bundles** | Unified SSL config with hot reload (see security reference) |

@@ -2,7 +2,7 @@
 
 Rules for an API whose web UI (or other client) is **generated from its OpenAPI contract**, for example a UI made from [crud-ui-blueprint](https://github.com/mmartofel/crud-ui-blueprint). The UI builds its client code, forms, validation, error messages and login from the contract and from the values listed here. The UI never works around the contract, so every rule below is a requirement.
 
-**When it applies** (see the `conventions` skill, "REST API Built for a UI"): the user says the API backs a UI or generated clients; the project's `CLAUDE.md` names a UI; or the repo has `contract/openapi.json` or `docs/API-CONTRACT.md`. A contract document in the project (`docs/API-CONTRACT.md`) wins over this file. A plain API does not load this file.
+**When it applies** (see the `conventions` skill, "REST API Built for a UI"): the user says the API backs a UI or generated clients; the project's `CLAUDE.md` names a UI; or the repo has `contract/openapi.json`, `docs/API-CONTRACT.md` or `docs/DEPLOY-CONVENTION.md`. The project's copies of these documents (taken unchanged from the UI template, never edited in the API repo) win over this file: `docs/API-CONTRACT.md` for the contract, `docs/DEPLOY-CONVENTION.md` for the deployment (section 11). A plain API does not load this file.
 
 Examples use a resource `Person` (tag `Persons`, path `/api/persons`, realm `person`) and a `Task` with an optional `assignee` (a Person). Replace them with your resources.
 
@@ -178,7 +178,7 @@ private static ErrorResponseException problem(HttpStatus status, String detail, 
 ## 4. Updates and Concurrency
 
 - Responses include `version`. `<Resource>CreateRequest` has no `id` and no `version`.
-- `PUT` replaces the whole record: `<Resource>UpdateRequest` has the same fields and constraints as the create request plus a required `version` from the last read. Optional fields sent as `null` are cleared; a field with a default gets the default again.
+- `PUT` replaces the whole record: `<Resource>UpdateRequest` has the same fields and constraints as the create request plus a required `version` from the last read. Optional fields sent as `null` or left out are cleared (the UI leaves a cleared field out of the request); a field with a default gets the default again. Optional fields are therefore not typed nullable in the contract (no `"null"` in `type`).
 - The service compares the request's `version` with the loaded entity and throws `ObjectOptimisticLockingFailureException` on mismatch (409 without `errors`); see `jpa-patterns`, Optimistic Locking. `PUT` uses `saveAndFlush`, so `version` and `updatedAt` in the response are current.
 
 ## 5. Lists, Search and Filters
@@ -221,7 +221,7 @@ public PagedModel<TaskResponse> listTasks(@ParameterObject @Valid TaskFilter fil
 
 ## 6. Relations
 
-- **Requests** reference a related record by id: `<relation>Id` (e.g. `assigneeId`), nullable when the relation is optional. An unknown id returns 400 with a field error on `<relation>Id`, code `not-found`.
+- **Requests** reference a related record by id: `<relation>Id` (e.g. `assigneeId`), not required when the relation is optional and a plain `int64` (no nullable type): it is cleared like any optional field (section 4). An unknown id returns 400 with a field error on `<relation>Id`, code `not-found`.
 - **Responses** embed a summary `<relation>: {id, label}` (both required), where `label` is the display name, so a list never needs one request per row:
 
   ```java
@@ -245,10 +245,13 @@ public PagedModel<TaskResponse> listTasks(@ParameterObject @Valid TaskFilter fil
 The UI logs in against a Keycloak realm with Authorization Code + PKCE, and its setup (`crud-ui-init`) expects this shape. For realm `<realm>`:
 
 - **Roles:** realm roles `<realm>-viewer` (read) and `<realm>-editor` (read and write). Reads need either role; writes need `<realm>-editor`.
-- **Clients:** `<realm>-ui`, public, standard flow only, PKCE `S256`, redirect URI `http://localhost:5173/*`, web origin `http://localhost:5173`. `<realm>-api`, confidential, service account with `<realm>-editor`, secret `<realm>-api-secret` (dev only), for `client_credentials` smoke tests.
-- **Demo users** (password = username): `viewer` with `<realm>-viewer`, `editor` with `<realm>-editor`. The UI's e2e tests log in as them.
+- **Clients:**
+  - `<realm>-ui`: public, standard flow only, PKCE `S256`, `rootUrl` `${authBaseUrl}`, redirect URIs `/*` and `http://localhost:5173/*`, post-logout redirect URIs `/*##http://localhost:5173/*`, web origins `+`. The relative URIs resolve to the host the request came through, so sign-in works on any generated Route or Ingress host with no realm change, and a foreign host is rejected.
+  - `<realm>-api`: confidential, service account with `<realm>-editor`, for `client_credentials` smoke tests. Its secret is a placeholder (`${<REALM>_API_CLIENT_SECRET}`): a fixed demo value in `docker-compose.yml`, a random one in the cluster Secret `<project>-oidc-client` (key `client-secret`).
+- **Demo users:** `viewer` with `<realm>-viewer`, `editor` with `<realm>-editor`. The UI's e2e tests log in as them. Their passwords are placeholders too (`${DEMO_VIEWER_PASSWORD}`, `${DEMO_EDITOR_PASSWORD}`). They default to the user name in Docker Compose and on clusters, and are set on the first deploy of a publicly reachable cluster.
 - **Internationalization** on: `en` (default) and `pl`; the login page follows the UI's `ui_locales`.
-- **One realm file** `k8s/realm.json`, imported with `--import-realm` by Docker Compose (Keycloak `start-dev`, volume `./k8s/realm.json:/opt/keycloak/data/import/realm.json:ro`) and by Kubernetes (`configMapGenerator` in `k8s/kustomization.yaml`, so a changed file rolls a new pod). `--import-realm` skips an existing realm: after a change run `docker compose up -d --force-recreate keycloak`.
+- **One realm file** `deploy/base/realm.json`, imported with `--import-realm` by Docker Compose (Keycloak `start-dev`, volume `./deploy/base/realm.json:/opt/keycloak/data/import/realm.json:ro`) and by Kubernetes (`configMapGenerator` in `deploy/base/kustomization.yaml`, so a changed file rolls a new pod). It holds **no host and no secret value**: Keycloak substitutes the `${ENV}` placeholders at import. `--import-realm` skips an existing realm: after a change run `docker compose up -d --force-recreate keycloak`.
+- **In a cluster** Keycloak runs with `KC_PROXY_HEADERS=xforwarded` and no `KC_HOSTNAME`. It gets no Route or Ingress of its own: the browser reaches the realm's public paths (`/realms/<realm>/`, `/resources/`) through the UI's host, whose nginx proxies them; the master realm and `/admin` stay private. Keycloak builds every URL, the token issuer included, from the host the browser used. A fixed `KC_HOSTNAME` or absolute redirect URIs break sign-in as soon as the Route gets a generated host.
 - **Ports:** Keycloak 8080, API 8081 (`server.port: ${SERVER_PORT:8081}`), PostgreSQL 5432.
 
 ```java
@@ -280,7 +283,7 @@ private static JwtAuthenticationConverter realmRoles() {
 }
 ```
 
-The JWT is validated with `spring.security.oauth2.resourceserver.jwt.jwk-set-uri: ${JWK_SET_URI:http://localhost:8080/realms/<realm>/protocol/openid-connect/certs}`.
+The JWT is validated with `spring.security.oauth2.resourceserver.jwt.jwk-set-uri: ${JWK_SET_URI:http://localhost:8080/realms/<realm>/protocol/openid-connect/certs}`. In a cluster the Deployment builds `JWK_SET_URI` from the ConfigMap keys `KEYCLOAK_URL` (`http://keycloak:8080`) and `REALM`: `value: $(KEYCLOAK_URL)/realms/$(REALM)/protocol/openid-connect/certs`. It points inside the cluster. Do not derive it from the issuer: the issuer is the public UI host, which the API pod may not reach. When the API also checks `iss`, the public issuer is a single value (`OIDC_ISSUER`) set in the environment overlay, never in `base`.
 
 ## 8. Status Endpoints
 
@@ -328,7 +331,7 @@ public `/actuator/health` (components) and `/actuator/info` (`build.version`).
 
 ## 10. Build Order and Definition of Done
 
-Build order for a new API: skeleton (`pom.xml` with `build-info` and actuator, `docker-compose.yml` with PostgreSQL and Keycloak, `k8s/` with `realm.json`, `application.yml`, CI with the contract check), then the shared infrastructure (`SecurityConfig`, `OpenApiConfig`, `ApiExceptionHandler` with `Problem`/`FieldError`/`notFound`/`inUse`, `Reference`, the contract export test), then one resource at a time, referenced resources first (migration, entity, DTOs, filter, repository, service, controller, tests, README).
+Build order for a new API: copy `docs/API-CONTRACT.md` and `docs/DEPLOY-CONVENTION.md` from the UI template unchanged (crud-ui-blueprint's `docs/API-KICKSTART.md` also hands over a `CLAUDE.md` template); then the skeleton (`pom.xml` with `build-info` and actuator, `docker-compose.yml` with PostgreSQL and Keycloak and their healthchecks, `deploy/` as section 11 lays it out with `deploy/base/realm.json`, `skaffold.yaml`, `application.yml`, CI with the contract check and the overlay render), then the shared infrastructure (`SecurityConfig`, `OpenApiConfig`, `ApiExceptionHandler` with `Problem`/`FieldError`/`notFound`/`inUse`, `Reference`, the contract export test), then one resource at a time, referenced resources first (migration, entity, DTOs, filter, repository, service, controller, tests, README).
 
 Done means:
 1. `mvn clean verify` passes with the integration tests running, not skipped.
@@ -336,3 +339,17 @@ Done means:
 3. Positive and negative tests; a relation change has an integration test.
 4. The local API was smoke-tested with a `client_credentials` token from `<realm>-api` and the smoke data deleted.
 5. README updated: changelog, API and error tables, "Connect a UI".
+6. A schema change also updates the demo data seed (`data.md`, Flyway, "Demo Data Seed"), so a fresh deploy still shows records in the UI.
+
+## 11. Deployment (Kubernetes and OpenShift)
+
+The API and the UI are separate repos, but they deploy as one application. They share one convention, `docs/DEPLOY-CONVENTION.md`. It lives in the UI template, every repo has an identical copy, and a change goes into all copies in the same session. When the project has the file, follow it; this section is its summary. Generic patterns (overlays, probes, PVC, Compose healthchecks) are in `cloud.md`.
+
+- **Nothing in git names a cluster, host, registry, namespace or secret value.** The same files deploy to any cluster and namespace. What differs per environment comes from an environment overlay or a Skaffold flag.
+- **Layout:** `deploy/base` (plain Kubernetes: PostgreSQL, Keycloak, the API, its ConfigMap, the realm `configMapGenerator`), `deploy/overlays/{local,openshift,kubernetes}`, `deploy/environments/example` (committed) and `deploy/environments/<env>` (git-ignored). Skaffold profiles: none (local, with port forwarding), `openshift`, `kubernetes`. See `cloud.md` for the `skaffold.yaml`.
+- **Names:** the stack's dependencies use the fixed Service names `postgres` and `keycloak`, which the UI repo relies on (`http://<api>:8080`, `http://keycloak:8080`). The whole application is installed into **one namespace**, API repo first, then UI repo. Each `skaffold run` and `skaffold delete` covers only its own repo's objects.
+- **Labels** on every Deployment, Service, Route and Ingress: `app.kubernetes.io/name`, `app.kubernetes.io/component` (`backend`, `database`, `auth`, `frontend`) and `app.kubernetes.io/part-of` (the same in every repo). Selectors stay `app: <name>`. `app.kubernetes.io/version` is set only at deploy time (`--label app.kubernetes.io/version=$(git rev-parse --short HEAD)`).
+- **OpenShift Topology** (only in `overlays/openshift`): one metadata-only patch per Deployment (`topology-<app>.yaml`). It carries `app.openshift.io/runtime` (`spring`, `postgresql`; Keycloak has no console icon, so it gets `app.openshift.io/custom-icon`), `app.openshift.io/vcs-uri`, and `app.openshift.io/connects-to` arrows from each caller to what it calls. Each repo declares only its own arrows: API → `postgres`, `keycloak`. Check a new runtime value against the console's icon list; an unknown value silently shows a generic icon.
+- **Secrets:** `base` references Secrets by name only: `postgres` (`database`, `username`, `password`), `keycloak-admin` (`username`, `password`), `<api>-oidc-client` (`client-secret`), `<api>-demo-users`. A Skaffold `before` deploy hook, `deploy/ensure-secrets.sh`, creates each missing Secret in the deploy's namespace and context (`$SKAFFOLD_NAMESPACES`, `$SKAFFOLD_KUBE_CONTEXT`). Real secrets get random values (`openssl rand -hex 16`). It **never changes an existing Secret**, because PostgreSQL keeps the password of its first start. An environment that manages its own Secrets creates them first, and the hook leaves them alone.
+- **One public host,** the UI's. Its nginx proxies `/api/` and `/actuator/{health,info}` to the API, and `/realms/<realm>/` and `/resources/` to Keycloak. The API may have its own Route (no `spec.host`: OpenShift generates one) for Swagger UI and machine clients. Keycloak has none (section 7).
+- **Checks:** CI renders every overlay and the example environment (`kustomize build`), and a `grep` of the rendered output finds no cluster domain, registry or namespace. `localhost` may appear only in the realm's development redirect.
