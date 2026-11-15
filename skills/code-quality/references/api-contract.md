@@ -19,5 +19,9 @@ Only when the API is built for a UI or generated clients (decision table: `conve
 - `allowedActions` stored in the read model instead of computed per user
 - a broken rule returned as 409 without `invalid-state`, or as 422
 - separate services without a gateway or without a merged contract
+- personal data copied into an event to label a relation; labels of another service's records are read at read time (§12, Relations Across Services)
+- a client of another service of the API that is only mocked in the tests, without a check against that service's exported contract
+- a gateway without `trusted-proxies` or services without `server.forward-headers-strategy` (`Location` names the service, not the gateway)
+- `FieldError.code` lists that differ between services of one API
 
 Do not copy its rules into findings; cite the section.

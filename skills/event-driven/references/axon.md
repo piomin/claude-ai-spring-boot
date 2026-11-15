@@ -77,6 +77,16 @@ Take from the reference of the selected version, and from nowhere else: the anno
 - **No telemetry by default.** Axon's update checker sends JVM and OS details to Axoniq. Switch it off in the application, in the tests and in CI (`axoniq.update-checker.disabled=true` for 5.x; look up the property for other versions). The README says how to switch it back on.
 - **Everything in `conventions`** that the architecture decision does not replace: no Lombok, constructor injection, Problem Details, Testcontainers with `@ServiceConnection`, positive and negative tests.
 
+### Versions in Command Results
+
+A command endpoint returns `CommandResult(id, version)`, and every command after the create carries the version the client read (`event-sourcing.md`, Command Endpoints). Check how the selected version exposes the stream's sequence number; on Axon 5.4 with the aggregate-based storage engine this worked:
+
+- **The entity counts its own version.** A `version` field starting at -1, incremented in every `@EventSourcingHandler`. It is the sequence number of the last event applied: 0 after the creating event, the same number the event store stores and the relay sends to the query side.
+- **The handler checks the client's version first** (`entity.requireVersion(command.version())`, 409 without `errors` on a mismatch), before any rule, so a client with a stale view reloads before it sees a rule error.
+- **Compute the new version before the append.** Axon 5 applies an appended event to the injected entity right away, so `entity.version() + 1` read *after* the append counts the event twice. Use `command.version() + 1` (or `entity.version() + n` read before appending `n` events to that entity). A create returns 0.
+- **The handler returns it, the controller reads it:** a `long` return value of the `@CommandHandler`, `commandGateway.sendAndWait(command, Long.class)`.
+- **Test it end to end:** an integration test asserts that the version in the `CommandResult` equals the `sequence-number` the relay put on the event.
+
 ## 5. Build Order
 
 1. Version and event store selected, told to the user and recorded.
@@ -97,3 +107,4 @@ In addition to `event-sourcing.md`:
 | Event-sourcing handler that validates, throws or has side effects | Important |
 | State changed in a command handler instead of through an event | Important |
 | Axon version changed without updating the architecture block and the README | Important |
+| `CommandResult.version` computed from the entity after the append (counts the new event twice) | Important |
