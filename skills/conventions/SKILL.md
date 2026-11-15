@@ -54,7 +54,7 @@ Decide first whether these rules apply. They are **required only when the API is
 
 | Situation | Action |
 |-----------|--------|
-| The user says the API backs a web UI or generated clients; the project's `CLAUDE.md` names a UI (e.g. a `crud-ui-blueprint` UI); the repo has `contract/openapi.json`, `docs/API-CONTRACT.md` or `docs/DEPLOY-CONVENTION.md` | **Load the `spring-boot` skill, `references/ui-contract.md`, and follow it** |
+| The user says the API backs a web UI or generated clients; the project's `CLAUDE.md` / `AGENTS.md` names a UI (e.g. a `crud-ui-blueprint` UI); the repo has `contract/openapi.json`, `docs/API-CONTRACT.md` or `docs/DEPLOY-CONVENTION.md` | **Load the `spring-boot` skill, `references/ui-contract.md`, and follow it** |
 | Service-to-service API, internal API, or no client is generated from the contract | **Optional** - the general rules above are enough; use a rule from `ui-contract.md` only when the user asks for it |
 | Unsure | Ask once whether a UI or generated client will consume the API |
 
