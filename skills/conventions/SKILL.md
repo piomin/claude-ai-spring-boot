@@ -68,7 +68,7 @@ If the user picks layered CRUD, ask nothing else.
 | `topology` | `separate-services`, `single-service` |
 | `transport` | `kafka`, `in-process` (always `in-process` for an event-sourced single service) |
 | `read-store` | `postgresql`, or the store the user named |
-| `event-store` | Event Sourcing only: `postgresql`, `axon` (then also `axon-version` and `axon-event-store`: `axon-server` or `postgresql`) |
+| `event-store` | Event Sourcing only: `postgresql`, `axon` (then also `axon-version`, `axon-event-store`: `axon-server` or `postgresql`, and with `postgresql` the `axon-storage-engine` and its licence) |
 
 Layered CRUD is recorded as the single line `style: layered-crud`, so a subagent or a later session does not ask again. Record a decision only after the dialog ran: an existing project without the block is layered CRUD as it is, and gets no block added.
 

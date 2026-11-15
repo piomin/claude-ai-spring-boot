@@ -34,6 +34,8 @@ Ask one more question, then record the answer (`axon-event-store`):
 
 Look up, for the selected version, which storage engines exist, their Maven artifacts, how Axon Server is switched off when it is not used, and which PostgreSQL version the engine needs. Tell the user about any limit you find (for example a feature that only Axon Server supports).
 
+Check the licence of each engine before you offer it. Axoniq ships open-source engines and commercial add-ons side by side, with similar names. For PostgreSQL on Axon 5.4, the open-source choice was `AggregateBasedJpaEventStorageEngine` (JPA, Apache 2), and `axoniq-postgresql` was a commercial add-on. Confirm this for the selected version. Use an open-source engine unless the user asks for the commercial one. Record the engine and its licence in the block (`axon-storage-engine`).
+
     ## Architecture
     style: cqrs-event-sourcing
     scope: Order
@@ -41,6 +43,7 @@ Look up, for the selected version, which storage engines exist, their Maven arti
     event-store: axon
     axon-version: 5.4.1
     axon-event-store: postgresql
+    axon-storage-engine: AggregateBasedJpaEventStorageEngine (open source, Apache 2)
     read-store: postgresql
 
 ## 3. What Axon Replaces
@@ -71,6 +74,7 @@ Take from the reference of the selected version, and from nowhere else: the anno
 - **Projections** are idempotent, track their position (Axon's token store) and can be rebuilt (reset the processor).
 - **Packages and topology** as in `topology.md`. With separate services, events travel through Axon Server when it is the event store; with a PostgreSQL store, use Kafka as in `kafka.md` or ask the user.
 - **Flyway owns the schema.** Read models always. For Axon's own tables (events, tokens, and so on), switch off automatic creation where the selected version allows it and create them in a migration from the DDL of that version. If the selected engine can only create its tables itself, tell the user and write it in the README.
+- **No telemetry by default.** Axon's update checker sends JVM and OS details to Axoniq. Switch it off in the application, in the tests and in CI (`axoniq.update-checker.disabled=true` for 5.x; look up the property for other versions). The README says how to switch it back on.
 - **Everything in `conventions`** that the architecture decision does not replace: no Lombok, constructor injection, Problem Details, Testcontainers with `@ServiceConnection`, positive and negative tests.
 
 ## 5. Build Order
