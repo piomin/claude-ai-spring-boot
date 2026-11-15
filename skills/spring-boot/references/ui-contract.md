@@ -2,7 +2,7 @@
 
 Rules for an API whose web UI (or other client) is **generated from its OpenAPI contract**, for example a UI made from [crud-ui-blueprint](https://github.com/mmartofel/crud-ui-blueprint). The UI builds its client code, forms, validation, error messages and login from the contract and from the values listed here. The UI never works around the contract, so every rule below is a requirement.
 
-**When it applies** (see the `conventions` skill, "REST API Built for a UI"): the user says the API backs a UI or generated clients; the project's `CLAUDE.md` names a UI; or the repo has `contract/openapi.json`, `docs/API-CONTRACT.md` or `docs/DEPLOY-CONVENTION.md`. The project's copies of these documents (taken unchanged from the UI template, never edited in the API repo) win over this file: `docs/API-CONTRACT.md` for the contract, `docs/DEPLOY-CONVENTION.md` for the deployment (section 11). A plain API does not load this file.
+**When it applies** (see the `conventions` skill, "REST API Built for a UI"): the user says the API backs a UI or generated clients; the project's `CLAUDE.md` / `AGENTS.md` names a UI; or the repo has `contract/openapi.json`, `docs/API-CONTRACT.md` or `docs/DEPLOY-CONVENTION.md`. The project's copies of these documents (taken unchanged from the UI template, never edited in the API repo) win over this file: `docs/API-CONTRACT.md` for the contract, `docs/DEPLOY-CONVENTION.md` for the deployment (section 11). A plain API does not load this file.
 
 Examples use a resource `Person` (tag `Persons`, path `/api/persons`, realm `person`) and a `Task` with an optional `assignee` (a Person). Replace them with your resources.
 
