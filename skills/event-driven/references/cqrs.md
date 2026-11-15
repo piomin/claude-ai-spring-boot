@@ -112,6 +112,8 @@ public class OrderCommandController {
 | Update | 200 with `CommandResult` |
 | Delete | 204 |
 
+**Built for a UI:** `PUT` and `DELETE` do not appear. The edit and the removal become actions (`POST /api/orders/{id}/edit` and `/cancel`, 202 with `CommandResult`), and the read model adds `status` and `allowedActions` (`spring-boot` skill, `references/ui-contract.md` section 12).
+
 A command endpoint never returns the record: the read model may not have it yet. Document in the README and in the OpenAPI description that queries are eventually consistent, and that a client sends the `version` from `CommandResult` or from its last read.
 
 ## Events

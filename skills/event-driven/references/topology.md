@@ -84,9 +84,9 @@ Rules:
 - **`-events` module:** event records and their sealed interface, nothing else. Its `pom.xml` has no `<dependencies>`. It is the contract between the two services.
 - **Command service:** owns the write database, the outbox and the Kafka producer. It exposes only command endpoints (`POST`, `PUT`, `DELETE`).
 - **Query service:** owns its own read database and the Kafka consumers. It exposes only query endpoints (`GET`). It never calls the command service and has no dependency on its module.
-- **Same paths, two base URLs.** Both services use the same resource path (`/api/v1/orders`): writes go to the command service, reads to the query service. No gateway is generated; the README lists both base URLs. Locally the command service listens on 8080 and the query service on 8081 (`server.port: ${SERVER_PORT:8081}`).
+- **Same paths, two base URLs.** Both services use the same resource path (`/api/v1/orders`): writes go to the command service, reads to the query service. No gateway is generated; the README lists both base URLs. **Built for a UI:** the UI needs one origin and one contract, so a gateway module routes by method and merges the contracts (`spring-boot` skill, `references/ui-contract.md` section 12). The paths are then `/api/...`, and the gateway takes the API's port. Locally the command service listens on 8080 and the query service on 8081 (`server.port: ${SERVER_PORT:8081}`).
 - **Flyway per service.** Each service has its own `db/migration` and its own schema history. A change to an event ships with the migrations of both services when both need one.
-- **Shared code is not shared.** Each service has its own `ApiExceptionHandler` and configuration. Only events are shared, so the `-events` module stays free of Spring.
+- **Shared code is not shared.** Each service has its own `ApiExceptionHandler` and configuration. Only events are shared, so the `-events` module stays free of Spring. For a UI, the status enum and the actions rule (`OrderActions`) live there too, as plain Java.
 - **Version.** The modules share the parent's version. A change to an event is a contract change and bumps it.
 
 ### Docker Compose

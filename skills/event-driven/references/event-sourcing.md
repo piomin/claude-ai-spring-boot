@@ -453,6 +453,7 @@ public CommandResult pay(@PathVariable UUID id, @Valid @RequestBody PayOrderRequ
 - Endpoints are named after the command (`POST /orders/{id}/pay`), not after a field update. A `PUT` that replaces the record does not fit: there is no record to replace, only things that happen.
 - `{id}` is a `UUID`.
 - The README and the OpenAPI description state that queries are eventually consistent: after a 201 or 202 a `GET` may still return the old state or 404.
+- **Built for a UI:** a `DomainRuleException` is 409 with `errors: [{code: "invalid-state"}]`, and the read model adds `status` and `allowedActions` (`spring-boot` skill, `references/ui-contract.md` section 12).
 
 ## Projections
 

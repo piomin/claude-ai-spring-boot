@@ -31,9 +31,9 @@ A project without the block is layered CRUD: do not apply this skill to it, and 
 | CQRS (no event sourcing) | Supported: `references/cqrs.md` |
 | CQRS + Event Sourcing (PostgreSQL event store) | Supported: `references/event-sourcing.md` |
 | CQRS + Event Sourcing (Axon Framework) | Supported as a procedure: `references/axon.md`. The code comes from the Axon reference of the version selected for the project |
-| CQRS or Event Sourcing for an API built for a UI (`spring-boot` skill, `references/ui-contract.md`) | Not yet supported |
+| CQRS or Event Sourcing for an API built for a UI | Supported: also follow `spring-boot` skill, `references/ui-contract.md` section 12 (command resources). It wins over this skill where they differ (`/api`, actions instead of `PUT`/`DELETE`, `invalid-state`, gateway) |
 
-For a style that is not yet supported, say so and stop. Do not approximate it with another style, and never use Kafka as an event store.
+Do not approximate one style with another, and never use Kafka as an event store.
 
 ## Core Workflow
 

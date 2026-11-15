@@ -30,7 +30,7 @@ Before generating any code, find the architecture decision (`conventions` skill,
 4. `style: layered-crud`: follow this file as it is.
 5. `style: cqrs` or `style: cqrs-event-sourcing`: load the `event-driven` skill and follow it. It replaces "Project Structure", the service-layer patterns and the workflow steps marked *(layered CRUD)*; everything else in this file still applies. With Event Sourcing, entities and `@Version` are replaced too: aggregates have no JPA mapping.
 6. `event-store: axon` without `axon-version` in the block: the Axon version and its event store are not chosen yet. Stop and return that question to the main conversation (`event-driven` skill, `references/axon.md`).
-7. CQRS or Event Sourcing for an API built for a UI: not yet supported. Say so and stop; do not fall back to another style.
+7. CQRS or Event Sourcing for an API built for a UI: the aggregates in `scope` are command resources. Follow `references/ui-contract.md` section 12 of the `spring-boot` skill as well as `event-driven`; section 12 wins where they differ.
 
 ## Project Structure (layered CRUD)
 
@@ -65,7 +65,7 @@ src/main/resources/
 
 Apply this section **only** when the API is built for a web UI or another client generated from its OpenAPI contract (the user says so, the project's `CLAUDE.md` names a UI, or the repo has `contract/openapi.json`); see the `conventions` skill, "REST API Built for a UI". Ask once if unsure. A plain API skips it.
 
-Load the `spring-boot` skill, `references/ui-contract.md`, and follow it in full: `/api` base path without CORS, springdoc 3 contract exported to `contract/openapi.json`, the fixed error codes, `PUT` with `version`, filters, `Reference {id, label}` relations, the Keycloak realm layout (no host or secret in the realm file), public `health`/`info`, the README "Connect a UI" section, and the `deploy/` layout shared with the UI repo. Its rules override the defaults of this agent (e.g. `/api/v1`).
+Load the `spring-boot` skill, `references/ui-contract.md`, and follow it in full: `/api` base path without CORS, springdoc 3 contract exported to `contract/openapi.json`, the fixed error codes, `PUT` with `version`, filters, `Reference {id, label}` relations, the Keycloak realm layout (no host or secret in the realm file), public `health`/`info`, the README "Connect a UI" section, the `deploy/` layout shared with the UI repo, and for CQRS or Event Sourcing the command resources of section 12. Its rules override the defaults of this agent (e.g. `/api/v1`).
 
 ## Default application.yml
 

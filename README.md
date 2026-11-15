@@ -1,4 +1,4 @@
-# Spring Boot Plugin for Claude Code (v1.4.0)
+# Spring Boot Plugin for Claude Code (v1.5.0)
 
 A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, a selectable architecture style (layered CRUD, CQRS, or CQRS with Event Sourcing), JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
 
@@ -196,7 +196,12 @@ read-store: postgresql
 - A prompt that already states the choices ("CQRS, single service, in-process events, PostgreSQL read model, for Order") gets a one-line confirmation instead of questions.
 - An **existing project** without the block is layered CRUD and is not asked, unless you request CQRS.
 
-Not yet supported, and answered as such in the dialog: **CQRS or Event Sourcing for an API built for a UI**.
+**CQRS or Event Sourcing for an API built for a UI** follows the UI's command resource rules (crud-ui-blueprint `docs/API-CONTRACT.md` section 11):
+
+- **Writes are actions:** each one is a `POST /api/<resource>/{id}/<action>` that returns 202 `{id, version}`. There's no `PUT` or `DELETE`.
+- **The read model** carries `version`, `status`, and `allowedActions` for the current user.
+- **Errors:** a stale version gets 409, and a command the state doesn't allow gets 409 `invalid-state`.
+- **Separate command and query services** sit behind a gateway, with one merged `contract/openapi.json`.
 
 ### APIs built for a UI
 
@@ -207,6 +212,7 @@ Some rules are **required only when the API is built for a UI** (or another clie
 - Problem Details field errors with a fixed set of codes the UI translates, `PUT` with a required `version`
 - typed list filters, relations as `{id, label}` summaries, 409 `in-use` instead of cascading deletes
 - the Keycloak realm layout the UI logs in with (no host or secret in the realm file, sign-in through the UI's host on any cluster), public `/actuator/health` and `/actuator/info`, and a README "Connect a UI" section
+- for CQRS / Event Sourcing: command resources (actions, `allowedActions`, `invalid-state`, a gateway and a merged contract for separate services)
 - a `deploy/` layout shared with the UI repo (kustomize base and overlays for a local cluster, Kubernetes and OpenShift, Secrets created by a Skaffold hook), following the project's `docs/DEPLOY-CONVENTION.md` when it has one
 
 Without a UI, none of this is required: the generated API keeps Problem Details, paging and optimistic locking, and skips the contract export.

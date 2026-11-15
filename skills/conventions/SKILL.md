@@ -45,9 +45,7 @@ With question 1, state the cost in two lines:
 
 If the user picks layered CRUD, ask nothing else.
 
-**Not yet supported.** Reply "not yet supported in this version of the plugin" and ask again between the supported options. Never fall back silently:
-
-- **CQRS or Event Sourcing for an API built for a UI** (see "REST API Built for a UI"): the UI contract expects one API that returns the full record on every write. Offer layered CRUD only.
+**CQRS or Event Sourcing for an API built for a UI** (see "REST API Built for a UI"): supported. The aggregates in `scope` become command resources of the UI contract: actions instead of `PUT` and `DELETE`, `allowedActions` in the read model, and a gateway in front of separate services (`spring-boot` skill, `references/ui-contract.md` section 12). Say this with the cost of question 1. The UI must support command resources (crud-ui-blueprint's `docs/API-CONTRACT.md` section 11).
 
 **Axon Framework.** When the user picks it, the `event-driven` skill, `references/axon.md`, continues the dialog before any code: it selects the Axon version that fits the project's Spring Boot version, tells the user which one, and asks whether events are stored in Axon Server or in PostgreSQL.
 
@@ -129,7 +127,7 @@ Decide first whether these rules apply. They are **required only when the API is
 | Service-to-service API, internal API, or no client is generated from the contract | **Optional** - the general rules above are enough; use a rule from `ui-contract.md` only when the user asks for it |
 | Unsure | Ask once whether a UI or generated client will consume the API |
 
-`references/ui-contract.md` is the single source of these rules: `/api` base path without CORS, operationIds, the springdoc 3 contract exported to `contract/openapi.json` and checked in CI, the fixed `FieldError` codes, `PUT` with a required `version`, filters, `Reference {id, label}` relations, Keycloak realm layout, public `health`/`info`, the README "Connect a UI" section, and the deployment shared with the UI repo (`deploy/` overlays, no host or secret in git). Where it differs from the defaults above (e.g. `/api` instead of `/api/v1`), it wins; the project's own copies of `docs/API-CONTRACT.md` and `docs/DEPLOY-CONVENTION.md` win over both.
+`references/ui-contract.md` is the single source of these rules: `/api` base path without CORS, operationIds, the springdoc 3 contract exported to `contract/openapi.json` and checked in CI, the fixed `FieldError` codes, `PUT` with a required `version`, filters, `Reference {id, label}` relations, Keycloak realm layout, public `health`/`info`, the README "Connect a UI" section, the deployment shared with the UI repo (`deploy/` overlays, no host or secret in git), and, for CQRS or Event Sourcing, command resources (section 12). Where it differs from the defaults above (e.g. `/api` instead of `/api/v1`), it wins; the project's own copies of `docs/API-CONTRACT.md` and `docs/DEPLOY-CONVENTION.md` win over both.
 
 ## Relational Database Schema (Flyway)
 
