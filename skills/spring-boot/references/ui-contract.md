@@ -338,7 +338,7 @@ Done means:
 1. `mvn clean verify` passes with the integration tests running, not skipped.
 2. `contract/openapi.json` is regenerated, its `info.version` bumped, and part of the change.
 3. Positive and negative tests; a relation change has an integration test.
-4. The local API was smoke-tested with a `client_credentials` token from `<realm>-api` and the smoke data deleted.
+4. The local API was smoke-tested with a `client_credentials` token from `<realm>-api` and the smoke data deleted. After the first deploy to a cluster, and after a change to `deploy/`, the same on the cluster: at least one write through the API's public entry (its Route, or `/api/` on the UI's host), with a token from the cluster's Keycloak (through the UI's host, or `kubectl port-forward svc/keycloak`). Pods that are Running and green health checks are not enough.
 5. README updated: changelog, API and error tables, "Connect a UI".
 6. A schema change also updates the demo data seed (`data.md`, Flyway, "Demo Data Seed"), so a fresh deploy still shows records in the UI.
 
@@ -470,6 +470,7 @@ Besides the tests of `testing.md` and section 2:
 - **Integration:** a create returns 201 with `Location`; an action returns 202 and the read model reaches its version (Awaitility, `testing.md`); a stale version returns 409 without `errors`; an action the status does not allow returns 409 `invalid-state`; a viewer gets an empty `allowedActions` and 403 on a command.
 - **Separate services:** a gateway test against stub HTTP servers (WireMock, or the JDK's `com.sun.net.httpserver.HttpServer` answering with its name, the method and the headers it got) asserts the method routing, that `Authorization` and `X-Forwarded-Host` reach the service, and the health components. `MockRestServiceServer` cannot stand in for them: the gateway proxies over real HTTP. Add the drift and wire-format tests of "Relations Across Services".
 - **Smoke test the running stack** before reporting the API as done (section 10, Done 4): a token from `<realm>-api`, a create through the gateway, a read until the version arrives, a stale version and an `invalid-state`. The tests mock the services' clients of each other; this is where a mismatch between them shows.
+- **Smoke test the cluster too,** after the first deploy and after every change to `deploy/` (section 10, Done 4): send **one command through the gateway** on the cluster (a create, then its read until the version arrives) and watch the gateway pod (`kubectl get pod` restarts, `kubectl top`). Reads and health checks alone pass when the command route is wrong. In order-management-cqrs-api, a gateway ConfigMap whose `COMMAND_SERVICE_URL` named the gateway itself sent every command around in a loop until the pod was OOMKilled. Its health check still reported the command service UP, because it checked the gateway too. In the same file the gateway's `image:` named no Skaffold artifact, so Skaffold never replaced it. Check both when the gateway is added: every `*_SERVICE_URL` names another Service, and every own image is an artifact in `skaffold.yaml`.
 
 ### Build Order Additions
 
