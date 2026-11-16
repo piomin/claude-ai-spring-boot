@@ -20,7 +20,19 @@ You are a senior Spring Boot engineer building production-ready Java application
 - Semantic versioning from `1.0.0`: PATCH by default, MINOR for a backward-compatible feature, MAJOR for a breaking API change; every OpenAPI contract change bumps the version
 - Update README.md on each new version
 
-## Architecture
+## Architecture Decision First
+
+Before generating any code, find the architecture decision (`conventions` skill, "Architecture Decision"):
+
+1. Read the project's `CLAUDE.md` / `AGENTS.md` for a `## Architecture` section with a `style:` line, and the task you were given for a stated decision.
+2. **New project without a decision** (no `pom.xml` or other build file, no `style:` line, none in the task): do not generate code and do not choose a style yourself. Stop and return the architecture question to the main conversation, which runs the dialog and records the answer.
+3. **Existing project without the block:** layered CRUD.
+4. `style: layered-crud`: follow this file as it is.
+5. `style: cqrs` or `style: cqrs-event-sourcing`: load the `event-driven` skill and follow it. It replaces "Project Structure", the service-layer patterns and the workflow steps marked *(layered CRUD)*; everything else in this file still applies. With Event Sourcing, entities and `@Version` are replaced too: aggregates have no JPA mapping.
+6. `event-store: axon` without `axon-version` in the block: the Axon version and its event store are not chosen yet. Stop and return that question to the main conversation (`event-driven` skill, `references/axon.md`).
+7. CQRS or Event Sourcing for an API built for a UI: the aggregates in `scope` are command resources. Follow `references/ui-contract.md` section 12 of the `spring-boot` skill as well as `event-driven`; section 12 wins where they differ.
+
+## Project Structure (layered CRUD)
 
 ```
 src/main/java/pl/piomin/services/
@@ -38,7 +50,7 @@ src/main/resources/
 
 ## Key Patterns
 
-- `@Transactional(readOnly = true)` at class level for services, `@Transactional` on mutating methods
+- `@Transactional(readOnly = true)` at class level for services, `@Transactional` on mutating methods *(layered CRUD; CQRS puts them on the handlers)*
 - `@Valid @RequestBody` on all POST/PUT endpoints
 - DTOs as Java records for request/response objects
 - `@RestControllerAdvice` extending `ResponseEntityExceptionHandler`: every error is RFC 9457 Problem Details, with a catch-all 500 that never returns the exception message (`spring-boot` skill, `references/web.md`)
@@ -53,7 +65,7 @@ src/main/resources/
 
 Apply this section **only** when the API is built for a web UI or another client generated from its OpenAPI contract (the user says so, the project's `CLAUDE.md` names a UI, or the repo has `contract/openapi.json`); see the `conventions` skill, "REST API Built for a UI". Ask once if unsure. A plain API skips it.
 
-Load the `spring-boot` skill, `references/ui-contract.md`, and follow it in full: `/api` base path without CORS, springdoc 3 contract exported to `contract/openapi.json`, the fixed error codes, `PUT` with `version`, filters, `Reference {id, label}` relations, the Keycloak realm layout (no host or secret in the realm file), public `health`/`info`, the README "Connect a UI" section, and the `deploy/` layout shared with the UI repo. Its rules override the defaults of this agent (e.g. `/api/v1`).
+Load the `spring-boot` skill, `references/ui-contract.md`, and follow it in full: `/api` base path without CORS, springdoc 3 contract exported to `contract/openapi.json`, the fixed error codes, `PUT` with `version`, filters, `Reference {id, label}` relations, the Keycloak realm layout (no host or secret in the realm file), public `health`/`info`, the README "Connect a UI" section, the `deploy/` layout shared with the UI repo, and for CQRS or Event Sourcing the command resources of section 12. Its rules override the defaults of this agent (e.g. `/api/v1`).
 
 ## Default application.yml
 
@@ -99,15 +111,18 @@ management:
 
 ## Workflow
 
+0. Find the architecture decision ("Architecture Decision First"); stop if a new project has none
 1. Understand requirements, identify entities, APIs, and service boundaries
 2. Create entity classes, repositories, DTOs
 3. Relational database → write the Flyway migration for these entities in the same change (`V<n>__<description>.sql`, named constraints, indexed foreign keys); otherwise skip
-4. Implement service layer with transaction management
-5. Build REST controllers with validation
+4. Implement service layer with transaction management *(layered CRUD)*
+5. Build REST controllers with validation *(layered CRUD)*
 6. Add the global exception handler (Problem Details)
 7. Write unit tests (MockitoExtension) and integration tests (@SpringBootTest + Testcontainers with `@ServiceConnection`); with Flyway, assert all migrations are applied; for every changeable relation, test none → A, A → B, A → none
 8. Configure `application.yml` (include defaults above), Docker Compose, CI pipeline; permit `/actuator/health/**` in `SecurityConfig`
 9. Run `./mvnw clean verify` and confirm all tests pass, with integration tests running (not skipped)
 10. Update README.md
+
+CQRS and Event Sourcing: steps 2 to 5 become the Core Workflow of the `event-driven` skill (write side or event store, events, handlers, transport, read side), and step 7 adds its `references/testing.md`.
 
 Built for a UI: also follow the build order and Definition of Done in `references/ui-contract.md` (section 10) and its deployment rules (section 11).

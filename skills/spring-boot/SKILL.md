@@ -17,8 +17,8 @@ Enterprise Spring Boot 4.x development with focus on clean architecture and prod
 ## Core Workflow
 
 1. **Analyze** - Understand requirements, identify service boundaries, APIs, data models
-2. **Design** - Plan architecture, confirm design before coding
-3. **Implement** - Build with constructor injection and layered architecture; for a relational database, write Flyway migrations alongside entities (`ddl-auto: validate`)
+2. **Design** - Find or ask for the architecture decision (`conventions` skill, "Architecture Decision"), plan the architecture, confirm the design before coding
+3. **Implement** - Build with constructor injection and layered architecture (`style: cqrs` or `cqrs-event-sourcing`: the `event-driven` skill instead of the layering below); for a relational database, write Flyway migrations alongside entities (`ddl-auto: validate`)
 4. **Secure** - Add Spring Security, OAuth2, method security; verify tests pass
 5. **Test** - Write unit, integration tests; run `./mvnw clean verify` and confirm all pass, with integration tests running (not skipped)
 6. **Deploy** - Configure health checks via Actuator; validate `/actuator/health` returns UP and `/actuator/info` shows `build.version`
@@ -184,7 +184,7 @@ Load detailed patterns based on context:
 | Topic | Reference | When to Load |
 |-------|-----------|-------------|
 | Web/REST | `references/web.md` | Controllers, paged lists, validation, PUT and `version`, Problem Details (RFC 9457) with `errors[]` |
-| API built for a UI | `references/ui-contract.md` | Only when a UI or generated client consumes the OpenAPI contract (see `conventions`): `/api`, springdoc 3 contract export, error codes, filters, relations, Keycloak, "Connect a UI", deployment with the UI |
+| API built for a UI | `references/ui-contract.md` | Only when a UI or generated client consumes the OpenAPI contract (see `conventions`): `/api`, springdoc 3 contract export, error codes, filters, relations, Keycloak, "Connect a UI", deployment with the UI, command resources for CQRS / Event Sourcing (§12) |
 | Data Access | `references/data.md` | JPA, repositories, transactions, queries, Flyway migrations |
 | Security | `references/security.md` | Spring Security 6, OAuth2, JWT, auth |
 | Cloud/Config | `references/cloud.md` | Config server, discovery, resilience, virtual threads, HTTP interfaces, GraalVM native, OTLP tracing |
@@ -225,6 +225,8 @@ Load detailed patterns based on context:
 - Build with `./mvnw clean verify`: classes compiled by the IDE in `target` can hide `javac` errors
 
 ## Architecture Patterns
+
+Structure and layering below are for layered CRUD, the default style. A project whose `CLAUDE.md` / `AGENTS.md` says `style: cqrs` or `style: cqrs-event-sourcing` follows the `event-driven` skill, `references/topology.md`, instead.
 
 **Project Structure:**
 ```

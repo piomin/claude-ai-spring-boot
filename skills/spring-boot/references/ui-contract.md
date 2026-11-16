@@ -4,7 +4,7 @@ Rules for an API whose web UI (or other client) is **generated from its OpenAPI 
 
 **When it applies** (see the `conventions` skill, "REST API Built for a UI"): the user says the API backs a UI or generated clients; the project's `CLAUDE.md` / `AGENTS.md` names a UI; or the repo has `contract/openapi.json`, `docs/API-CONTRACT.md` or `docs/DEPLOY-CONVENTION.md`. The project's copies of these documents (taken unchanged from the UI template, never edited in the API repo) win over this file: `docs/API-CONTRACT.md` for the contract, `docs/DEPLOY-CONVENTION.md` for the deployment (section 11). A plain API does not load this file.
 
-Examples use a resource `Person` (tag `Persons`, path `/api/persons`, realm `person`) and a `Task` with an optional `assignee` (a Person). Replace them with your resources.
+Examples use a resource `Person` (tag `Persons`, path `/api/persons`, realm `person`) and a `Task` with an optional `assignee` (a Person). Replace them with your resources. With `style: cqrs` or `cqrs-event-sourcing`, the aggregates in `scope` are **command resources**: section 12 says what changes for them.
 
 ## 1. Endpoints
 
@@ -150,9 +150,10 @@ RFC 9457 Problem Details (`application/problem+json`, schema `Problem` with `sta
   | `date-range` | cross-field rule, reported on the later field (`@DateRange` in `web.md`) |
   | `not-found` | unknown `<relation>Id` in a request (400) |
   | `in-use` | delete of a record that is still referenced (409, no `field`) |
+  | `invalid-state` | command resources only: a command the aggregate's state does not allow (409, no `field`, section 12) |
 
   List them in `@Schema(allowableValues = ...)` on `FieldError.code`. A new code is a contract change: add it to the mapping, the enum, the README and the tests, and tell the UI team (it needs a translation).
-- `message` is an English fallback only. `field` is absent only for record-level errors (`in-use`).
+- `message` is an English fallback only. `field` is absent only for record-level errors (`in-use`, `invalid-state`).
 - Status codes the UI handles: 400 (field errors on the form), 401 (re-login), 403 ("no access"), 404 ("not found" page), **409 with `errors`** (field conflict, e.g. `unique`, or `in-use`), **409 without `errors`** (stale `version`: the UI offers a reload). Never return a stale-version 409 with `errors`.
 
 Prepared errors for relations, rendered by `ResponseEntityExceptionHandler` without an extra `@ExceptionHandler`:
@@ -337,7 +338,7 @@ Done means:
 1. `mvn clean verify` passes with the integration tests running, not skipped.
 2. `contract/openapi.json` is regenerated, its `info.version` bumped, and part of the change.
 3. Positive and negative tests; a relation change has an integration test.
-4. The local API was smoke-tested with a `client_credentials` token from `<realm>-api` and the smoke data deleted.
+4. The local API was smoke-tested with a `client_credentials` token from `<realm>-api` and the smoke data deleted. After the first deploy to a cluster, and after a change to `deploy/`, the same on the cluster: at least one write through the API's public entry (its Route, or `/api/` on the UI's host), with a token from the cluster's Keycloak (through the UI's host, or `kubectl port-forward svc/keycloak`). Pods that are Running and green health checks are not enough.
 5. README updated: changelog, API and error tables, "Connect a UI".
 6. A schema change also updates the demo data seed (`data.md`, Flyway, "Demo Data Seed"), so a fresh deploy still shows records in the UI.
 
@@ -353,3 +354,124 @@ The API and the UI are separate repos, but they deploy as one application. They 
 - **Secrets:** `base` references Secrets by name only: `postgres` (`database`, `username`, `password`), `keycloak-admin` (`username`, `password`), `<api>-oidc-client` (`client-secret`), `<api>-demo-users`. A Skaffold `before` deploy hook, `deploy/ensure-secrets.sh`, creates each missing Secret in the deploy's namespace and context (`$SKAFFOLD_NAMESPACES`, `$SKAFFOLD_KUBE_CONTEXT`). Real secrets get random values (`openssl rand -hex 16`). It **never changes an existing Secret**, because PostgreSQL keeps the password of its first start. An environment that manages its own Secrets creates them first, and the hook leaves them alone.
 - **One public host,** the UI's. Its nginx proxies `/api/` and `/actuator/{health,info}` to the API, and `/realms/<realm>/` and `/resources/` to Keycloak. The API may have its own Route (no `spec.host`: OpenShift generates one) for Swagger UI and machine clients. Keycloak has none (section 7).
 - **Checks:** CI renders every overlay and the example environment (`kustomize build`), and a `grep` of the rendered output finds no cluster domain, registry or namespace. `localhost` may appear only in the realm's development redirect.
+
+## 12. CQRS and Event Sourcing (Command Resources)
+
+For an aggregate inside the architecture block's `scope` (`style: cqrs` or `cqrs-event-sourcing`, `event-driven` skill) when the API is built for a UI. The UI's `docs/API-CONTRACT.md` section 11, "Command resources", is the contract; this section is how a Spring Boot API meets it. Aggregates outside `scope` stay CRUD resources (sections 1–6). Sections 2, 3, 5, 7, 8, 9, 10 and 11 apply to command resources too; this section replaces sections 1, 4 and the delete rule of 6 for them.
+
+### Endpoints
+
+| Method and path | Controller method | Success |
+|---|---|---|
+| `GET /api/orders` | `listOrders` | 200 `PagedModel` of `OrderResponse` |
+| `GET /api/orders/{id}` | `getOrder` | 200 `OrderResponse` |
+| `POST /api/orders` | `createOrder` | 201 `CommandResult`, `Location` header |
+| `POST /api/orders/{id}/cancel` | `cancelOrder` | 202 `CommandResult` |
+| `POST /api/deliveries/{id}/ship` | `shipDelivery` | 202 `CommandResult` |
+
+- **Actions, not `PUT` or `DELETE`.** Every change after the create is a command named after what happens (`event-sourcing.md`, Command Endpoints). The path segment is kebab case and the method is `<action><Resource>`, which becomes the operationId. This holds for `style: cqrs` too: an edit of the data is an action like any other (`POST /api/orders/{id}/edit`, `editOrder`), and removing a record is an action that leaves it readable (`cancel`, `archive`), never a `DELETE`.
+- Each action has its own request record, `<Action><Resource>Request` (`CancelOrderRequest`), with a required `version`. An action without input has only `version`. The create request is `<Resource>CreateRequest` and has no `version`.
+- `CommandResult(id, version)`, both `@Schema(requiredMode = REQUIRED)`: the aggregate id and its version after the command. The create sets `Location` to `/api/orders/{id}` (`ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")`).
+- **Ids:** `UUID` for an event-sourced aggregate (springdoc writes `format: uuid`), `Long` for a CQRS aggregate kept in JPA. One type per resource. `Reference` (section 6) has the id type of the record it points to. When an API has both id types, add a second record `UuidReference(UUID id, String label)`: two records named `Reference` would collide in the contract's schema names.
+- Command and query controllers carry the same `@Tag` (`Orders`), so the UI sees one resource.
+
+### Read Model
+
+`OrderResponse` has, all required, besides its own fields:
+
+- `version`: the aggregate version of the last event the projection applied (`cqrs.md`, Projection; for Event Sourcing the stream version).
+- `status`: a Java enum, so the contract has a string enum the UI translates.
+- `allowedActions`: `List<String>`, the action path segments the **current user** may run in the current state, for example `["cancel", "pay"]`.
+
+The server owns the state machine; the UI shows only what `allowedActions` lists. Keep the rule in one place that both sides use, next to the events (in `events` for separate services):
+
+```java
+/** Which actions each status allows. The aggregate enforces them; the query side lists them for the UI. */
+public final class OrderActions {
+
+    private static final Map<OrderStatus, List<String>> BY_STATUS = Map.of(
+            OrderStatus.PLACED, List.of("pay", "cancel"),
+            OrderStatus.PAID, List.of("ship", "cancel"),
+            OrderStatus.SHIPPED, List.of("deliver"),
+            OrderStatus.DELIVERED, List.of(),
+            OrderStatus.CANCELLED, List.of());
+
+    private OrderActions() {
+    }
+
+    public static List<String> allowed(OrderStatus status) {
+        return BY_STATUS.get(status);
+    }
+}
+```
+
+The query handler maps the stored `status` and then filters by role: a user without `<realm>-editor` gets an empty list. `allowedActions` is computed at read time, never stored in the read model, because it depends on the user. A parameterized test runs every action against an aggregate in every status and asserts that the aggregate accepts exactly the ones `OrderActions` lists.
+
+- **An action can depend on another aggregate.** Completing a payment also marks its order paid, so `complete` is allowed only while the order is `PLACED`. Give such a rule both statuses (`PaymentActions.allowed(PaymentStatus, OrderStatus)`). The query side loads the related statuses for the whole page in one query. The test runs every combination of the two statuses, and makes the same domain calls the command handler makes. A rule that lives only in a handler cannot be tested this way: move it into the aggregate (`order.acceptsRefund()`).
+- **The read model's `version` and the command's must count the same way.** For Event Sourcing both are the stream's sequence number (0 for the creating event). With Axon, see `axon.md`, "Versions in Command Results".
+
+### Relations Across Services
+
+A command resource's response embeds its relations as `{id, label}` (section 6). With separate services, the label of a record another service owns (a person's name on an order) is not in this service's database:
+
+- **Look it up when the response is built.** One call per relation and page to the owning service's list endpoint with an `ids` filter (`GET /api/persons?ids=1&ids=7&size=100`), passing the caller's bearer token on (a `ClientHttpRequestInterceptor` that copies `Authorization` from the current request).
+- **Never copy the label into an event to save the call** when it is personal data: the event store is append-only, so the name could no longer be erased (`event-sourcing.md`, Personal Data). Copying is fine for values that are not personal and belong to the fact, like an item's name and price at the time of the order.
+- **Keep reads working when the lookup fails.** An id the other service does not know (erased) or cannot answer for gets a generic label (`"Person 7"`). Catch `RestClientException` *and* `HttpMessageConversionException`: an answer the client cannot read is not a `RestClientException`, and would otherwise be a 500.
+- **Read the list into your own record,** `record Page<T>(List<T> content)`, not into Spring Data's `PagedModel`, which Jackson cannot construct.
+
+The integration tests mock these clients, so they cannot see the other service change. Add two tests:
+
+- **Drift:** read the other service's exported contract (`../<service>/target/openapi.json`, built earlier in the reactor) and assert that every field of the client's records exists in the matching response schema, nested records included.
+- **Wire format:** the real client, built on a `RestClient.Builder` bound to `MockRestServiceServer`, against a response body shaped like the other service's, plus the fallback on a 500.
+
+### Errors
+
+| Case | Response |
+|---|---|
+| Stale `version` (the client's version is not the current one, or a concurrent command appended first) | 409 **without** `errors` (section 3): the UI offers a reload |
+| A rule the current state breaks (`DomainRuleException` in `event-sourcing.md`, or the CQRS handler's state check) | 409 with `errors: [{code: "invalid-state", message}]`, no `field`, the rule as `detail` |
+| Unknown `<relation>Id` in a command | 400 `not-found` on that field (section 6), never 422 |
+| Unknown `{id}` on an action | 404 |
+
+Add `invalid-state` to the `FieldError.code` enum and to the codes table (section 3), next to a prepared error:
+
+```java
+/** 409: the command is not allowed in the aggregate's current state. */
+public static ErrorResponseException invalidState(String detail) {
+    return problem(HttpStatus.CONFLICT, detail, new FieldMessage(null, INVALID_STATE, detail));
+}
+```
+
+In the `OpenApiCustomizer` (section 2), an action path documents 400, 404 and both 409 cases; the create documents 400 and 409.
+
+### Eventual Consistency
+
+- `OpenApiConfig` sets `info.description` to say which resources are eventually consistent: after a 201 or 202, a `GET` may still return the old version, or 404 right after a create. The UI reads until `version` reaches `CommandResult.version`.
+- Never make a command wait for its projection to return a fuller response. With `transport: in-process` or a single service the read model may already be current; the contract is the same.
+
+### Separate Services: One Origin, One Contract
+
+With `topology: separate-services` the command and query services share paths, so the UI's single `/api` origin needs a router. Add a **gateway module** (`<project>-gateway`) with Spring Cloud Gateway Server Web MVC:
+
+1. **Select the version first.** Pick the latest GA Spring Cloud release train whose compatibility list includes the project's Spring Boot version, and use the BOM `org.springframework.cloud:spring-cloud-dependencies` and the starter `spring-cloud-starter-gateway-server-webmvc`. Read the list from the train itself, not from version numbers: the default of `spring.cloud.compatibility-verifier.compatible-boot-versions` in that train's `spring-cloud-commons` (for example, 2025.1.x accepts Boot 4.0.x and 4.1.x, while 2026.0 targets 4.2). A train that does not list the Boot version fails at startup. Tell the user which train you selected and why. Take the route property names from that train's configuration metadata or reference: they changed between releases (`spring.cloud.gateway.server.webmvc.routes` in 2025.x).
+2. **Routes:** `GET` on `/api/<command resources>/**` → query service, every other method on those paths → command service, `/api/<CRUD resources>/**` → the service that owns them. Upstream URIs come from configuration (`COMMAND_SERVICE_URL`, `QUERY_SERVICE_URL`, ...), never from code. The `Authorization` header passes through; every service stays a resource server with the `SecurityFilterChain` of section 7 (the gateway does not replace it).
+3. **Forwarded headers.** The gateway sends `X-Forwarded-*` only to callers that match `spring.cloud.gateway.server.webmvc.trusted-proxies` (unset by default). Set it to the private and loopback ranges (the UI's nginx and the router inside the cluster), and give every service `server.forward-headers-strategy: framework`. Otherwise the `Location` of a create names the service's own host and port instead of the gateway's.
+4. **Deployment:** the gateway takes the API's name in `deploy/` (the UI's nginx proxies `/api/` and `/actuator/{health,info}` to `http://<api>:8080`), and the services behind it have no Route or Ingress. Locally it listens on the API port the UI expects (`API_PROXY_TARGET`, section 9); the services move to the next free ports. Their new local defaults must not move them in the cluster: set `SERVER_PORT` in each service's ConfigMap to the port its Deployment and Service already use.
+5. **Status endpoints:** the gateway's `/actuator/health` has one component per service behind it (a `HealthIndicator` that calls the service's `/actuator/health/readiness` with a short timeout, no details), so the UI footer can say which part is down. Leave them out of the gateway's readiness group, so one service down does not take the gateway out of its Service. Switch off Spring Cloud's own components, which would show up in the footer: `spring.cloud.discovery.enabled: false` and `management.health.refresh.enabled: false`. `/actuator/info` `build.version` is the project version, the same in every module.
+6. **One contract.** Each service exports its own contract in its integration test (section 2) to `target/openapi.json`. The gateway module, built last in the reactor, has a test that merges them into `contract/openapi.json` at the root: `info` from the project (`info.version` = the project version, `info.description` with the consistency note), all `paths`, and `components.schemas`. It fails when one path and method comes from two services, or two services define the same schema name differently. Shared records (`Problem`, `FieldError`, `Reference`, `PageMetadata`) must come out identical: every service lists the **same** `FieldError.code` values, the union of the codes the whole API uses. CI checks the merged file as in section 2. The gateway serves it at `/v3/api-docs`: copy it into the jar in the `prepare-package` phase, after the tests regenerated it, or the jar holds the previous version.
+
+With `topology: single-service` there is no gateway: one application, one contract, sections 2 and 7 unchanged.
+
+### Tests
+
+Besides the tests of `testing.md` and section 2:
+
+- **Contract export:** `createOrder` has 201 and `cancelOrder` has 202, both with `CommandResult`; no `put` or `delete` under a command resource's path; `OrderResponse.required` contains `id`, `version`, `status` and `allowedActions`; `FieldError.code` lists `invalid-state`.
+- **Integration:** a create returns 201 with `Location`; an action returns 202 and the read model reaches its version (Awaitility, `testing.md`); a stale version returns 409 without `errors`; an action the status does not allow returns 409 `invalid-state`; a viewer gets an empty `allowedActions` and 403 on a command.
+- **Separate services:** a gateway test against stub HTTP servers (WireMock, or the JDK's `com.sun.net.httpserver.HttpServer` answering with its name, the method and the headers it got) asserts the method routing, that `Authorization` and `X-Forwarded-Host` reach the service, and the health components. `MockRestServiceServer` cannot stand in for them: the gateway proxies over real HTTP. Add the drift and wire-format tests of "Relations Across Services".
+- **Smoke test the running stack** before reporting the API as done (section 10, Done 4): a token from `<realm>-api`, a create through the gateway, a read until the version arrives, a stale version and an `invalid-state`. The tests mock the services' clients of each other; this is where a mismatch between them shows.
+- **Smoke test the cluster too,** after the first deploy and after every change to `deploy/` (section 10, Done 4): send **one command through the gateway** on the cluster (a create, then its read until the version arrives) and watch the gateway pod (`kubectl get pod` restarts, `kubectl top`). Reads and health checks alone pass when the command route is wrong. In order-management-cqrs-api, a gateway ConfigMap whose `COMMAND_SERVICE_URL` named the gateway itself sent every command around in a loop until the pod was OOMKilled. Its health check still reported the command service UP, because it checked the gateway too. In the same file the gateway's `image:` named no Skaffold artifact, so Skaffold never replaced it. Check both when the gateway is added: every `*_SERVICE_URL` names another Service, and every own image is an artifact in `skaffold.yaml`.
+
+### Build Order Additions
+
+After the shared infrastructure of section 10: `CommandResult`, `invalidState`, the actions rule per aggregate (`OrderActions`) and its parameterized test; with separate services, the gateway module and the merged contract before the first resource, so every resource is checked through it.
