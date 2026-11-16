@@ -14,8 +14,8 @@ The knowledge of what to check lives in skills. This file defines how to run the
 ## Process
 
 1. **Fix the scope.** Review the diff against a reference point: a branch, tag, commit, or `main` (`git diff <ref>...HEAD`, plus `git status` for uncommitted work). If the user gave none, default to `main...HEAD` and say so. If the ref does not resolve or the diff is empty, stop and report that instead of reviewing something else.
-2. **Detect the project.** From the build files and config, note which parts apply: relational database / Flyway, JPA, Spring Security, API built for a UI (see `conventions`), tests in the diff.
-3. **Load knowledge.** Read the `conventions` skill and the `code-quality` skill. Follow its "What to Load" table and read only the references that match the changed files; load related skills (`jpa-patterns`, `testing-patterns`, `logging-patterns`, `spring-boot` UI contract) only when the diff touches them.
+2. **Detect the project.** From the build files and config, note which parts apply: relational database / Flyway, JPA, Spring Security, API built for a UI (see `conventions`), tests in the diff. Read the architecture style from the `## Architecture` section of `CLAUDE.md` / `AGENTS.md` (its `style:` line); without one the project is layered CRUD.
+3. **Load knowledge.** Read the `conventions` skill and the `code-quality` skill. Follow its "What to Load" table and read only the references that match the changed files; load related skills (`jpa-patterns`, `testing-patterns`, `logging-patterns`, `spring-boot` UI contract) only when the diff touches them. When the style is `cqrs` or `cqrs-event-sourcing`, also read the `event-driven` skill and review against the "Review Signals" of its `references/cqrs.md`, plus those of `references/event-sourcing.md` (and `references/axon.md` when the block says `event-store: axon`) for Event Sourcing.
 4. **Review.** First the shape of the change (architecture, layering, test coverage of new behavior), then file by file. Read surrounding code when a finding depends on it.
 5. **Report** in the format below.
 
@@ -35,7 +35,7 @@ The knowledge of what to check lives in skills. This file defines how to run the
 ```markdown
 ## Code Review: [Component / Change Name]
 
-Scope: `<ref>...HEAD`, N files. Loaded: conventions, code-quality[, jpa-patterns, ...]
+Scope: `<ref>...HEAD`, N files. Style: layered-crud | cqrs | cqrs-event-sourcing. Loaded: conventions, code-quality[, jpa-patterns, ...]
 
 ### Critical Issues
 - **[Category]** (File.java:line) `quoted code` - Description. Fix: suggestion.
