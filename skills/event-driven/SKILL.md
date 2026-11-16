@@ -1,6 +1,6 @@
 ---
 name: event-driven
-description: CQRS and Event Sourcing for Spring Boot 4.x - command and query handlers, read models updated from domain events, transactional outbox with Apache Kafka or in-process events with Spring Modulith, an append-only PostgreSQL event store with aggregates rebuilt from events, upcasting and rebuildable projections, or Axon Framework, as separate command and query services or a single service. Use when the architecture block in the project's CLAUDE.md names the cqrs or cqrs-event-sourcing style, or when the user asks for CQRS, Event Sourcing, an event store, an outbox, projections or read models.
+description: CQRS and Event Sourcing for Spring Boot 4.x - command and query handlers, read models updated from domain events, transactional outbox with Apache Kafka or in-process events with Spring Modulith, an append-only PostgreSQL event store with aggregates rebuilt from events, upcasting and rebuildable projections, or Axon Framework, as separate command and query services or a single service. Use when the architecture block in the project's CLAUDE.md or AGENTS.md names the cqrs or cqrs-event-sourcing style, or when the user asks for CQRS, Event Sourcing, an event store, an outbox, projections or read models.
 metadata:
   version: "1.1.0"
   domain: backend
@@ -18,7 +18,7 @@ CQRS for Spring Boot 4.x: the write side and the read side are separate models, 
 
 Load this skill only when the architecture decision (`conventions` skill, "Architecture Decision") is not layered CRUD:
 
-- The project's `CLAUDE.md` (`AGENTS.md` in Codex) has `style: cqrs` or `style: cqrs-event-sourcing` in its `## Architecture` block.
+- The project's `CLAUDE.md` (`AGENTS.md` in Codex and OpenCode) has `style: cqrs` or `style: cqrs-event-sourcing` in its `## Architecture` block.
 - The user asks for CQRS, Event Sourcing, an event store, a transactional outbox, projections or read models.
 
 A project without the block is layered CRUD: do not apply this skill to it, and do not start the dialog here. The dialog and the block belong to `conventions`.

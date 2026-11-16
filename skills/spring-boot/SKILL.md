@@ -226,7 +226,7 @@ Load detailed patterns based on context:
 
 ## Architecture Patterns
 
-Structure and layering below are for layered CRUD, the default style. A project whose `CLAUDE.md` says `style: cqrs` or `style: cqrs-event-sourcing` follows the `event-driven` skill, `references/topology.md`, instead.
+Structure and layering below are for layered CRUD, the default style. A project whose `CLAUDE.md` / `AGENTS.md` says `style: cqrs` or `style: cqrs-event-sourcing` follows the `event-driven` skill, `references/topology.md`, instead.
 
 **Project Structure:**
 ```

@@ -56,7 +56,27 @@ cp -r claude-ai-spring-boot/skills/* my-project/.agents/skills/
 
 Codex follows symlinks, so you can `ln -s` each skill folder instead of copying to get updates with `git pull`. Restart Codex if the skills do not show up, then run `/skills` or type `$` to pick one, or just describe the task and Codex selects a matching skill.
 
-The `agents/` folder uses the Claude Code subagent format and is **Claude Code only**. Skills mention the `code-reviewer` and `security-engineer` agents as hand-offs; in Codex, ignore those references and apply the skill directly.
+The `agents/` folder uses the Claude Code subagent format and is not loaded by the Codex plugin. Skills mention the `code-reviewer` and `security-engineer` agents as hand-offs; in Codex, ignore those references and apply the skill directly.
+
+### Using the skills and agents with OpenCode
+
+[OpenCode](https://opencode.ai) reads the same `SKILL.md` skills, and the agent definitions in `agents/` work in both tools: the frontmatter holds only `name`, `description` and `mode: subagent` (plus read-only settings for `code-reviewer`), and each agent inherits the model and tools you configure.
+
+```bash
+git clone https://github.com/piomin/claude-ai-spring-boot.git
+
+# for all your projects
+mkdir -p ~/.config/opencode/skills ~/.config/opencode/agents
+cp -r claude-ai-spring-boot/skills/* ~/.config/opencode/skills/
+cp claude-ai-spring-boot/agents/*.md ~/.config/opencode/agents/
+
+# or for a single project
+mkdir -p my-project/.opencode/skills my-project/.opencode/agents
+cp -r claude-ai-spring-boot/skills/* my-project/.opencode/skills/
+cp claude-ai-spring-boot/agents/*.md my-project/.opencode/agents/
+```
+
+OpenCode also discovers skills in `.agents/skills` and `.claude/skills`. Project rules go in `AGENTS.md` (OpenCode) or `CLAUDE.md` (Claude Code); the skills treat both the same.
 
 ## What's Included
 
@@ -67,6 +87,7 @@ Specialized agents that Claude Code can invoke for specific tasks:
 | Agent | Purpose |
 |-------|---------|
 | `spring-boot-engineer` | Build Spring Boot 4.x apps with Problem Details errors, in the architecture style recorded for the project (layered CRUD by default, CQRS or Event Sourcing with the `event-driven` skill); adds the OpenAPI contract rules when the API is built for a UI |
+| `architect` | Turns a GitHub issue labeled `architect` into up to 8 small, ordered issues with implementation plans (uses `gh`, runs unattended, read-only on code), in the project's recorded architecture style |
 | `code-reviewer` | Read-only review of a diff or branch: fixes the scope, loads the `conventions` and `code-quality` skills (and `event-driven` for a CQRS or event-sourced project), reports cited findings by severity |
 | `kubernetes-specialist` | K8s deployments, probes, ConfigMap/Secret, Prometheus, Skaffold |
 | `devops-engineer` | CI/CD pipelines, Paketo Buildpacks, Skaffold |
@@ -93,7 +114,7 @@ Reusable knowledge that Claude loads contextually:
 
 The plugin enforces these rules via the `conventions` skill:
 
-- **Architecture decision** — asked once for a new project and recorded in its `CLAUDE.md` (see below)
+- **Architecture decision** — asked once for a new project and recorded in its `CLAUDE.md` / `AGENTS.md` (see below)
 - **No Lombok** — explicit constructors, getters/setters, `LoggerFactory.getLogger()`
 - **Constructor injection** — no `@Autowired` on fields
 - **RestClient** over RestTemplate/WebClient for blocking HTTP calls
@@ -149,7 +170,7 @@ For a **new project** (no build file yet), Claude asks which architecture style 
 | 5 | Read model store | PostgreSQL / another store | style is not CRUD |
 | 6 | Event store | PostgreSQL append-only table / Axon Framework | style is Event Sourcing |
 
-The answer is written to the project's `CLAUDE.md` and followed in every later session without asking again:
+The answer is written to the project's `CLAUDE.md` (or `AGENTS.md`) and followed in every later session without asking again:
 
 ```markdown
 ## Architecture
@@ -179,7 +200,7 @@ Not yet supported, and answered as such in the dialog: **CQRS or Event Sourcing 
 
 ### APIs built for a UI
 
-Some rules are **required only when the API is built for a UI** (or another client generated from its OpenAPI contract), for example a UI made from [crud-ui-blueprint](https://github.com/mmartofel/crud-ui-blueprint). Say so in your prompt ("the API backs a web UI generated from its OpenAPI contract") or in the project's `CLAUDE.md`. The `conventions` skill then loads `skills/spring-boot/references/ui-contract.md`, the single source of these rules:
+Some rules are **required only when the API is built for a UI** (or another client generated from its OpenAPI contract), for example a UI made from [crud-ui-blueprint](https://github.com/mmartofel/crud-ui-blueprint). Say so in your prompt ("the API backs a web UI generated from its OpenAPI contract") or in the project's `CLAUDE.md` / `AGENTS.md`. The `conventions` skill then loads `skills/spring-boot/references/ui-contract.md`, the single source of these rules:
 
 - `/api` base path, same origin (no CORS), operationIds the UI's generated client relies on
 - an OpenAPI contract generated by springdoc 3, exported to `contract/openapi.json` by a test and checked in CI, with `info.version` from the build

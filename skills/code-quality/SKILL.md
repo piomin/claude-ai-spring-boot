@@ -54,7 +54,7 @@ Related skills, loaded only when the diff needs them:
 
 - Formatting, import order, naming style that a formatter or linter enforces
 - Personal taste or rewrites that do not fix a concrete problem
-- Rules the repo contradicts on purpose: when `CLAUDE.md`, `conventions`, or an existing documented decision overrides a rule here, the repo wins
+- Rules the repo contradicts on purpose: when `CLAUDE.md` / `AGENTS.md`, `conventions`, or an existing documented decision overrides a rule here, the repo wins
 
 ## Quick Reference
 
