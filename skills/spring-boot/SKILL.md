@@ -177,6 +177,21 @@ class ProductControllerTest {
 }
 ```
 
+## Spring Boot 4 Starters
+
+Starter names changed in Boot 4. Never generate the old names:
+
+| Boot 3 (do not use) | Boot 4 |
+|---------------------|--------|
+| `spring-boot-starter-web` | `spring-boot-starter-webmvc` |
+| `spring-boot-starter-aop` | `spring-boot-starter-aspectj` (only for `org.aspectj.lang.annotation` usage) |
+| `spring-boot-starter-oauth2-*` | `spring-boot-starter-security-oauth2-*` |
+| `flyway-core` / `liquibase-core` alone | `spring-boot-starter-flyway` / `spring-boot-starter-liquibase` |
+| manual `micrometer-tracing-bridge-otel` + OTLP exporter | `spring-boot-starter-opentelemetry` (`management.opentelemetry.tracing.export.otlp.*`) |
+| `spring-boot-starter-test` only | plus `spring-boot-starter-<technology>-test` per technology (e.g. `-webmvc-test`) |
+
+Spring Retry is no longer in Boot's dependency management: use Spring Framework's retry support, or declare an explicit version.
+
 ## Reference Guide
 
 Load detailed patterns based on context:
@@ -186,8 +201,8 @@ Load detailed patterns based on context:
 | Web/REST | `references/web.md` | Controllers, paged lists, validation, PUT and `version`, Problem Details (RFC 9457) with `errors[]` |
 | API built for a UI | `references/ui-contract.md` | Only when a UI or generated client consumes the OpenAPI contract (see `conventions`): `/api`, springdoc 3 contract export, error codes, filters, relations, Keycloak, "Connect a UI", deployment with the UI |
 | Data Access | `references/data.md` | JPA, repositories, transactions, queries, Flyway migrations |
-| Security | `references/security.md` | Spring Security 6, OAuth2, JWT, auth |
-| Cloud/Config | `references/cloud.md` | Config server, discovery, resilience, virtual threads, HTTP interfaces, GraalVM native, OTLP tracing |
+| Security | `references/security.md` | Spring Security 7, OAuth2, JWT, auth |
+| Cloud/Config | `references/cloud.md` | Config server, discovery, retry/concurrency limit, virtual threads, HTTP interfaces, GraalVM native, OTLP tracing |
 | AI | `references/ai.md` | Only when the app calls an LLM: Spring AI 2.x `ChatClient`, structured output, tool calling, RAG, chat memory, MCP server, testing, 1.x to 2.0 renames |
 | Testing | `references/testing.md` | Unit, integration, slice tests, Testcontainers @ServiceConnection |
 
@@ -311,4 +326,4 @@ public class SecurityConfig {
 
 ## Knowledge Base
 
-Spring Boot 4.x, Java 21+, Spring WebFlux, Project Reactor, Spring Data JPA, Spring Security, OAuth2/JWT, Hibernate, R2DBC, Spring Cloud, Resilience4j, Micrometer, JUnit 5, Testcontainers, Mockito, Maven, Paketo Buildpacks, Skaffold
+Spring Boot 4.x, Java 21+, Spring WebFlux, Project Reactor, Spring Data JPA, Spring Security, OAuth2/JWT, Hibernate, R2DBC, Spring Cloud, Micrometer, JUnit 5, Testcontainers, Mockito, Maven, Paketo Buildpacks, Skaffold

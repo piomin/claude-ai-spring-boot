@@ -99,6 +99,8 @@ class OrderServiceTest {
 
 ---
 
+Spring Boot 4 imports: `@WebMvcTest` is in `org.springframework.boot.webmvc.test.autoconfigure`, `@DataJpaTest` in `org.springframework.boot.data.jpa.test.autoconfigure`, `@MockitoBean` in `org.springframework.test.context.bean.override.mockito`, `PostgreSQLContainer` in `org.testcontainers.postgresql` (Testcontainers 2, not generic), `JsonMapper` in `tools.jackson.databind.json` (Jackson 3). Full list and test dependencies: `spring-boot` → `references/testing.md`.
+
 ## Controller Slice Tests (@WebMvcTest)
 
 ```java
@@ -112,7 +114,7 @@ class ProductControllerTest {
     private ProductService productService;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     // ✅ Positive - successful creation
     @Test
@@ -127,7 +129,7 @@ class ProductControllerTest {
 
         mockMvc.perform(post("/api/v1/products")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(jsonMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.name").value("Widget"));
     }
@@ -140,7 +142,7 @@ class ProductControllerTest {
 
         mockMvc.perform(post("/api/v1/products")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(jsonMapper.writeValueAsString(request)))
             .andExpect(status().isBadRequest())
             .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.errors[0].field").value("name"))
@@ -194,7 +196,7 @@ class ProductRepositoryTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private ProductRepository productRepository;
@@ -244,7 +246,7 @@ class ProductIntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private RestTestClient restTestClient;
@@ -361,8 +363,8 @@ public class TestcontainersConfig {
 
     @Bean
     @ServiceConnection
-    public PostgreSQLContainer<?> postgresContainer() {
-        return new PostgreSQLContainer<>("postgres:16-alpine");
+    public PostgreSQLContainer postgresContainer() {
+        return new PostgreSQLContainer("postgres:16-alpine");
     }
 }
 
@@ -411,7 +413,7 @@ void shouldCheckAccessByRole(String email, String role, boolean expected) {
 | `@WebMvcTest(Controller.class)` | Controller tests with MockMvc |
 | `@DataJpaTest` | Repository tests with real DB |
 | `@SpringBootTest` + `RANDOM_PORT` | Full integration tests |
-| `@ServiceConnection` | Auto-configure Testcontainers (3.1+) |
+| `@ServiceConnection` | Auto-configure Testcontainers |
 | `@ParameterizedTest` | Multiple inputs, same assertion |
 | `assertThatThrownBy()` | Negative test - expect exception |
 | `verify(mock, never())` | Verify method was NOT called |

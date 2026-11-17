@@ -1,4 +1,4 @@
-# Spring Boot Plugin for Claude Code (v1.3.0)
+# Spring Boot Plugin for Claude Code (v1.3.1)
 
 A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
 
@@ -130,7 +130,7 @@ The plugin enforces these rules via the `conventions` skill:
 
 The `cloud.md` reference covers:
 
-- Spring Cloud (Config Server, Eureka, Gateway, Resilience4j, LoadBalancer)
+- Spring Cloud (Config Server, Eureka, Gateway, LoadBalancer) and built-in `@Retryable`/`@ConcurrencyLimit`
 - Distributed tracing with OpenTelemetry (OTLP) and Micrometer Observation API
 - Virtual Threads, HTTP Interface Clients (`@HttpExchange`), GraalVM Native Image
 - Kubernetes: ConfigMap/Secret with `envFrom`, Prometheus annotations, startup/liveness/readiness probes, `preStop` hook, graceful shutdown

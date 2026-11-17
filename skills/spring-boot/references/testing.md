@@ -1,5 +1,30 @@
 # Testing - Spring Boot Test
 
+## Spring Boot 4 Imports and Dependencies
+
+Test annotations moved to per-technology packages and modules. Use these imports; the snippets below omit them.
+
+```java
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.client.RestTestClient;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;   // Testcontainers 2: not generic, no <?>
+import tools.jackson.databind.json.JsonMapper;              // Jackson 3, not com.fasterxml.jackson.databind.ObjectMapper
+```
+
+- `@SpringBootTest` no longer provides MockMvc: add `@AutoConfigureMockMvc`.
+- `RestTestClient` needs `spring-boot-resttestclient` (test scope).
+- `@WebMvcTest` needs `spring-boot-starter-webmvc-test`; the other slices follow `spring-boot-starter-<technology>-test`.
+- Testcontainers needs `spring-boot-testcontainers`, `org.testcontainers:testcontainers-junit-jupiter` and the module for the database (`org.testcontainers:testcontainers-postgresql`), all test scope.
+- Boot 4 auto-configures a `JsonMapper`, not an `ObjectMapper`: inject `JsonMapper` (`tools.jackson.databind.json`). Jackson annotations keep `com.fasterxml.jackson.annotation`.
+
 ## Unit Testing with JUnit 5
 
 ```java
@@ -155,7 +180,7 @@ class UserControllerTest {
     private UserService userService;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -206,7 +231,7 @@ class UserControllerTest {
         // When & Then
         mockMvc.perform(post("/api/v1/users")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .content(jsonMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
             .andExpect(header().exists("Location"))
             .andExpect(jsonPath("$.email").value(request.email()))
@@ -318,7 +343,7 @@ class UserServiceIntegrationTest {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private UserService userService;
@@ -364,12 +389,12 @@ class UserServiceIntegrationTest {
 }
 ```
 
-### Legacy approach (Spring Boot < 3.1, not recommended)
+### Legacy approach (not recommended)
 
 ```java
 // @DynamicPropertySource - still works, but @ServiceConnection is simpler
 @Container
-static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine")
     .withDatabaseName("testdb")
     .withUsername("test")
     .withPassword("test");
@@ -390,8 +415,8 @@ public class TestcontainersConfig {
 
     @Bean
     @ServiceConnection
-    public PostgreSQLContainer<?> postgresContainer() {
-        return new PostgreSQLContainer<>("postgres:16-alpine");
+    public PostgreSQLContainer postgresContainer() {
+        return new PostgreSQLContainer("postgres:16-alpine");
     }
 }
 
