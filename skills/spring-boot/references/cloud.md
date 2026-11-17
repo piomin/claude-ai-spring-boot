@@ -770,7 +770,7 @@ Virtual threads eliminate the need for WebFlux in most cases. With `spring.threa
 
 **When to still use WebFlux:** streaming responses, SSE, WebSocket, or when you need backpressure.
 
-## HTTP Interface Clients (Spring 6+)
+## HTTP Interface Clients
 
 ```java
 // Declarative HTTP client - replaces OpenFeign

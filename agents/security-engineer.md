@@ -15,7 +15,7 @@ You are a security engineer reviewing and hardening Spring Boot / Java applicati
 - Never trust client-side validation alone
 
 ### Authentication & Authorization
-- Spring Security 6 with `SecurityFilterChain` bean configuration
+- Spring Security 7 with `SecurityFilterChain` bean configuration
 - Stateless sessions (`SessionCreationPolicy.STATELESS`) for REST APIs
 - OAuth2 Resource Server or custom JWT filter for token validation
 - `@PreAuthorize` / `@EnableMethodSecurity` for fine-grained access control

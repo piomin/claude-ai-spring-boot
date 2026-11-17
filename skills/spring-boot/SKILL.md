@@ -186,7 +186,7 @@ Load detailed patterns based on context:
 | Web/REST | `references/web.md` | Controllers, paged lists, validation, PUT and `version`, Problem Details (RFC 9457) with `errors[]` |
 | API built for a UI | `references/ui-contract.md` | Only when a UI or generated client consumes the OpenAPI contract (see `conventions`): `/api`, springdoc 3 contract export, error codes, filters, relations, Keycloak, "Connect a UI", deployment with the UI |
 | Data Access | `references/data.md` | JPA, repositories, transactions, queries, Flyway migrations |
-| Security | `references/security.md` | Spring Security 6, OAuth2, JWT, auth |
+| Security | `references/security.md` | Spring Security 7, OAuth2, JWT, auth |
 | Cloud/Config | `references/cloud.md` | Config server, discovery, resilience, virtual threads, HTTP interfaces, GraalVM native, OTLP tracing |
 | AI | `references/ai.md` | Only when the app calls an LLM: Spring AI 2.x `ChatClient`, structured output, tool calling, RAG, chat memory, MCP server, testing, 1.x to 2.0 renames |
 | Testing | `references/testing.md` | Unit, integration, slice tests, Testcontainers @ServiceConnection |
