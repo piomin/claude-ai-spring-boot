@@ -177,6 +177,21 @@ class ProductControllerTest {
 }
 ```
 
+## Spring Boot 4 Starters
+
+Starter names changed in Boot 4. Never generate the old names:
+
+| Boot 3 (do not use) | Boot 4 |
+|---------------------|--------|
+| `spring-boot-starter-web` | `spring-boot-starter-webmvc` |
+| `spring-boot-starter-aop` | `spring-boot-starter-aspectj` (only for `org.aspectj.lang.annotation` usage) |
+| `spring-boot-starter-oauth2-*` | `spring-boot-starter-security-oauth2-*` |
+| `flyway-core` / `liquibase-core` alone | `spring-boot-starter-flyway` / `spring-boot-starter-liquibase` |
+| manual `micrometer-tracing-bridge-otel` + OTLP exporter | `spring-boot-starter-opentelemetry` |
+| `spring-boot-starter-test` only | plus `spring-boot-starter-<technology>-test` per technology (e.g. `-webmvc-test`) |
+
+Spring Retry is no longer in Boot's dependency management: use Spring Framework's retry support, or declare an explicit version.
+
 ## Reference Guide
 
 Load detailed patterns based on context:

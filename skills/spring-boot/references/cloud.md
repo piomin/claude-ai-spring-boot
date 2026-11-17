@@ -1,5 +1,31 @@
 # Cloud Native - Spring Cloud
 
+## Release Train and Starters
+
+Spring Boot 4.0.x and 4.1.x need the Spring Cloud **2025.1.x** (Oakwood) release train (4.1 from 2025.1.2). Older trains (2025.0.x and below) do not work. Import the BOM; there is no `spring-cloud-starter-parent` any more.
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-dependencies</artifactId>
+            <version>2025.1.2</version> <!-- use the latest 2025.1.x -->
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+| Need | Starter |
+|------|---------|
+| Config client | `spring-cloud-starter-config` |
+| Gateway on WebFlux (the example below) | `spring-cloud-starter-gateway-server-webflux` |
+| Gateway on Servlet / MVC | `spring-cloud-starter-gateway-server-webmvc` |
+
+Spring Cloud 2025.1 uses Jackson 3 and JSpecify nullability like Boot 4. Gateway properties live under `spring.cloud.gateway.server.webflux.*` (or `...server.webmvc.*`), not directly under `spring.cloud.gateway.*`. The `RouteLocatorBuilder` DSL below is the WebFlux flavor; the MVC flavor defines routes with `RouterFunction<ServerResponse>` and `GatewayRouterFunctions`.
+
 ## Spring Cloud Config Server
 
 ```java
@@ -185,22 +211,24 @@ public class GatewayApplication {
 spring:
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Origin
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowed-origins: "*"
-            allowed-methods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-            allowed-headers: "*"
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "*"
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                allowed-headers: "*"
 ```
 
 ## Circuit Breaker - Resilience4j
