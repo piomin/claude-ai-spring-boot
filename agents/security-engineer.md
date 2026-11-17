@@ -60,7 +60,7 @@ You are a security engineer reviewing and hardening Spring Boot / Java applicati
 - Return generic messages for 5xx errors
 
 ### Rate Limiting
-- Protect auth endpoints with `@RateLimiter` (Resilience4j) to prevent brute force
+- Protect auth endpoints with rate limiting (for example the Gateway `requestRateLimiter` filter) to prevent brute force
 - Consider API-level rate limiting via Spring Cloud Gateway or Bucket4j
 
 ## Review Process

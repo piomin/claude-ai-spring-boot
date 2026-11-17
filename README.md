@@ -130,7 +130,7 @@ The plugin enforces these rules via the `conventions` skill:
 
 The `cloud.md` reference covers:
 
-- Spring Cloud (Config Server, Eureka, Gateway, Resilience4j, LoadBalancer)
+- Spring Cloud (Config Server, Eureka, Gateway, LoadBalancer) and built-in `@Retryable`/`@ConcurrencyLimit`
 - Distributed tracing with OpenTelemetry (OTLP) and Micrometer Observation API
 - Virtual Threads, HTTP Interface Clients (`@HttpExchange`), GraalVM Native Image
 - Kubernetes: ConfigMap/Secret with `envFrom`, Prometheus annotations, startup/liveness/readiness probes, `preStop` hook, graceful shutdown
