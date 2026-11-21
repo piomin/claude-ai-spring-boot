@@ -1,0 +1,45 @@
+name: Publish skills artifact
+
+# A tag like 1.3.2 (no "v" prefix) publishes skills/ and agents/ as an OCI artifact and creates a GitHub release.
+# The ai-software-factory pipelines pull it with `oras pull quay.io/pminkows/claude-ai-spring-boot:<tag>`.
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+env:
+  IMAGE: quay.io/pminkows/claude-ai-spring-boot
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate skills, agents and version
+        run: .github/scripts/validate.sh "${GITHUB_REF_NAME}"
+
+      - name: Package
+        run: tar -czf skills.tar.gz skills agents
+
+      - uses: oras-project/setup-oras@v1
+        with:
+          version: 1.3.0
+
+      - name: Push to Quay
+        env:
+          QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+          QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
+        run: |
+          printf '%s' "$QUAY_PASSWORD" | oras login quay.io --username "$QUAY_USERNAME" --password-stdin
+          oras push "${IMAGE}:${GITHUB_REF_NAME}" skills.tar.gz 2>&1 | tee push.log
+          digest="$(sed -n 's/^Digest: //p' push.log)"
+          echo "Published \`${IMAGE}:${GITHUB_REF_NAME}\` (\`${digest}\`)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" skills.tar.gz --title "${GITHUB_REF_NAME}" --generate-notes
