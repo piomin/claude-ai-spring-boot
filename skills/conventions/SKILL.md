@@ -93,6 +93,8 @@ When the style is `cqrs` or `cqrs-event-sourcing`, load the `event-driven` skill
 - **RestTestClient** with `@AutoConfigureRestTestClient` for integration tests
 - **Testcontainers** with `@ServiceConnection` (not `@DynamicPropertySource`)
 - **Jakarta Persistence** (not `javax.persistence`)
+- **Jackson 3** (`tools.jackson`): inject `JsonMapper`, not `ObjectMapper`; `@JacksonComponent` replaces `@JsonComponent`; only `com.fasterxml.jackson.annotation` keeps its old package
+- **Boot 4 starters**: `spring-boot-starter-webmvc` (not `-web`), `spring-boot-starter-aspectj` (not `-aop`), test starters `spring-boot-starter-<technology>-test`
 - **Java records** for DTOs: `<Resource>Response`, `<Resource>CreateRequest`, `<Resource>UpdateRequest`; controllers never expose entities
 - **Maven** for dependency management
 - **Group ID**: `pl.piomin.services`

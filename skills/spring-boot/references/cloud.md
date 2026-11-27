@@ -1,5 +1,31 @@
 # Cloud Native - Spring Cloud
 
+## Release Train and Starters
+
+Spring Boot 4.0.x and 4.1.x need the Spring Cloud **2025.1.x** (Oakwood) release train (4.1 from 2025.1.2). Older trains (2025.0.x and below) do not work. Import the BOM; there is no `spring-cloud-starter-parent` any more.
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-dependencies</artifactId>
+            <version>2025.1.2</version> <!-- use the latest 2025.1.x -->
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+| Need | Starter |
+|------|---------|
+| Config client | `spring-cloud-starter-config` |
+| Gateway on WebFlux (the example below) | `spring-cloud-starter-gateway-server-webflux` |
+| Gateway on Servlet / MVC | `spring-cloud-starter-gateway-server-webmvc` |
+
+Spring Cloud 2025.1 uses Jackson 3 and JSpecify nullability like Boot 4. Gateway properties live under `spring.cloud.gateway.server.webflux.*` (or `...server.webmvc.*`), not directly under `spring.cloud.gateway.*`. The `RouteLocatorBuilder` DSL below is the WebFlux flavor; the MVC flavor defines routes with `RouterFunction<ServerResponse>` and `GatewayRouterFunctions`.
+
 ## Spring Cloud Config Server
 
 ```java
@@ -185,31 +211,38 @@ public class GatewayApplication {
 spring:
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Origin
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowed-origins: "*"
-            allowed-methods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-            allowed-headers: "*"
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Origin
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowed-origins: "*"
+                allowed-methods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                allowed-headers: "*"
 ```
 
-## Circuit Breaker - Resilience4j
+## Resilience - Retry and Concurrency Limit
+
+Spring Framework 7 ships `@Retryable` and `@ConcurrencyLimit` (package `org.springframework.resilience.annotation`), so no extra dependency is needed. Enable them with `@EnableResilientMethods` on a `@Configuration` class.
 
 ```java
+@Configuration
+@EnableResilientMethods
+public class ResilienceConfig {
+}
+
 @Service
 public class ExternalApiService {
-    private static final Logger log = LoggerFactory.getLogger(ExternalApiService.class);
-
     private final RestClient restClient;
 
     public ExternalApiService(RestClient.Builder builder) {
@@ -218,9 +251,8 @@ public class ExternalApiService {
             .build();
     }
 
-    @CircuitBreaker(name = "externalApi", fallbackMethod = "getFallbackData")
-    @Retry(name = "externalApi")
-    @RateLimiter(name = "externalApi")
+    @Retryable(includes = ResourceAccessException.class, maxRetries = 3, delay = 1000, multiplier = 2, maxDelay = 8000)
+    @ConcurrencyLimit(10)
     public ExternalData getData(String id) {
         return restClient
             .get()
@@ -228,56 +260,30 @@ public class ExternalApiService {
             .retrieve()
             .body(ExternalData.class);
     }
-
-    private ExternalData getFallbackData(String id, Exception e) {
-        log.warn("Fallback triggered for id: {}, error: {}", id, e.getMessage());
-        return new ExternalData(id, "Fallback data", LocalDateTime.now());
-    }
 }
-
-// application.yml
-resilience4j:
-  circuitbreaker:
-    instances:
-      externalApi:
-        register-health-indicator: true
-        sliding-window-size: 10
-        minimum-number-of-calls: 5
-        permitted-number-of-calls-in-half-open-state: 3
-        automatic-transition-from-open-to-half-open-enabled: true
-        wait-duration-in-open-state: 5s
-        failure-rate-threshold: 50
-        event-consumer-buffer-size: 10
-
-  retry:
-    instances:
-      externalApi:
-        max-attempts: 3
-        wait-duration: 1s
-        enable-exponential-backoff: true
-        exponential-backoff-multiplier: 2
-
-  ratelimiter:
-    instances:
-      externalApi:
-        limit-for-period: 10
-        limit-refresh-period: 1s
-        timeout-duration: 0s
 ```
+
+- `maxRetries` counts retries after the first call (total attempts = 1 + `maxRetries`, default 3); the old `max-attempts` of Resilience4j and Spring Retry does not exist here.
+- Every exception is retried unless `includes`/`excludes` narrow it. When retries run out, the last exception is rethrown, so handle the fallback in the caller or a `@ControllerAdvice`.
+- `@ConcurrencyLimit` caps simultaneous calls, which is useful with virtual threads. It is not a rate limiter over time.
+- Spring Retry (`@EnableRetry`, `RetryTemplate` from `org.springframework.retry`) is no longer in Boot's dependency management; use the annotations above.
+- Framework 7 has no circuit breaker or time-based rate limiter. Resilience4j's Spring Boot starter has no confirmed Spring Boot 4 release, so check Maven Central and its issue tracker before adding it, and do not generate `@CircuitBreaker`/`@RateLimiter` by default. At the edge, use the Gateway `circuitBreaker` and `requestRateLimiter` filters.
 
 ## Distributed Tracing - Micrometer + OpenTelemetry
 
 ### OTLP Exporter (Preferred)
 
 ```yaml
-# application.yml - OpenTelemetry Protocol (recommended over Zipkin)
+# application.yml - OpenTelemetry Protocol
 management:
   tracing:
     sampling:
       probability: 1.0
-  otlp:
+  opentelemetry:
     tracing:
-      endpoint: http://localhost:4318/v1/traces
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
 
 logging:
   pattern:
@@ -285,27 +291,34 @@ logging:
 ```
 
 ```xml
-<!-- pom.xml -->
+<!-- pom.xml: one starter replaces micrometer-tracing-bridge-otel + opentelemetry-exporter-otlp -->
 <dependency>
-    <groupId>io.micrometer</groupId>
-    <artifactId>micrometer-tracing-bridge-otel</artifactId>
-</dependency>
-<dependency>
-    <groupId>io.opentelemetry</groupId>
-    <artifactId>opentelemetry-exporter-otlp</artifactId>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-opentelemetry</artifactId>
 </dependency>
 ```
 
-### Zipkin Exporter (Alternative)
+- `management.otlp.tracing.endpoint` (Boot 3) is gone: tracing is configured under `management.opentelemetry.tracing.export.otlp.*`.
+- `management.tracing.sampling.probability` still applies; the default samples only 10% of requests.
+- `management.opentelemetry.tracing.sampler` picks the OpenTelemetry sampler (default `parent-based-trace-id-ratio`).
+
+### Zipkin Exporter (Deprecated)
+
+The OpenTelemetry-to-Zipkin auto-configuration is deprecated and is removed in Spring Boot 4.2. Prefer OTLP (Zipkin and Jaeger accept it). If Zipkin is required, use Brave:
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-zipkin</artifactId>
+</dependency>
+```
 
 ```yaml
 management:
   tracing:
-    sampling:
-      probability: 1.0
-  zipkin:
-    tracing:
-      endpoint: http://localhost:9411/api/v2/spans
+    export:
+      zipkin:
+        endpoint: http://localhost:9411/api/v2/spans
 ```
 
 ### Custom Spans with Observation API
@@ -770,7 +783,7 @@ Virtual threads eliminate the need for WebFlux in most cases. With `spring.threa
 
 **When to still use WebFlux:** streaming responses, SSE, WebSocket, or when you need backpressure.
 
-## HTTP Interface Clients (Spring 6+)
+## HTTP Interface Clients
 
 ```java
 // Declarative HTTP client - replaces OpenFeign

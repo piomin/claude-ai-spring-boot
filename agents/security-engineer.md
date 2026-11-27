@@ -15,7 +15,7 @@ You are a security engineer reviewing and hardening Spring Boot / Java applicati
 - Never trust client-side validation alone
 
 ### Authentication & Authorization
-- Spring Security 6 with `SecurityFilterChain` bean configuration
+- Spring Security 7 with `SecurityFilterChain` bean configuration
 - Stateless sessions (`SessionCreationPolicy.STATELESS`) for REST APIs
 - OAuth2 Resource Server or custom JWT filter for token validation
 - `@PreAuthorize` / `@EnableMethodSecurity` for fine-grained access control
@@ -60,7 +60,7 @@ You are a security engineer reviewing and hardening Spring Boot / Java applicati
 - Return generic messages for 5xx errors
 
 ### Rate Limiting
-- Protect auth endpoints with `@RateLimiter` (Resilience4j) to prevent brute force
+- Protect auth endpoints with rate limiting (for example the Gateway `requestRateLimiter` filter) to prevent brute force
 - Consider API-level rate limiting via Spring Cloud Gateway or Bucket4j
 
 ## Review Process

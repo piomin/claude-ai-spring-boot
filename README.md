@@ -1,4 +1,4 @@
-# Spring Boot Plugin for Claude Code (v1.4.0)
+# Spring Boot Plugin for Claude Code (v1.3.2)
 
 A Claude Code plugin with production-ready skills and agents for building Spring Boot 4.x / Java 21+ applications. Install the plugin and start generating your app — the skills and agents guide Claude to follow best practices for REST APIs with Problem Details errors, a selectable architecture style (layered CRUD, CQRS, or CQRS with Event Sourcing), JPA, Flyway database migrations, security, testing, cloud-native deployment, and Kubernetes.
 
@@ -105,6 +105,7 @@ Reusable knowledge that Claude loads contextually:
 | `code-quality` | Review checklist loaded on demand from 6 references (correctness, security, performance, Spring signals, REST semantics, code smells); points to `conventions` and other skills for project rules instead of repeating them |
 | `event-driven` | CQRS and Event Sourcing with 6 reference guides: topology (separate command and query services, or a single service), CQRS (commands, queries, events, projections), Event Sourcing (PostgreSQL event store, aggregates rebuilt from events, upcasting, projections with checkpoints), Axon Framework, Kafka (transactional outbox, relay, consumers) or in-process events with Spring Modulith, testing |
 | `design-patterns` | Classic patterns (Factory, Builder, Strategy) + enterprise (Saga, and short summaries of Outbox and CQRS that link to `event-driven`) |
+| `review-triage` | How to answer review feedback (PR comments, reviews, bot findings) without implementing everything: verify each remark against the code, accept, partly accept, reject or defer it with a one-line reason, and report point by point |
 | `testing-patterns` | JUnit 5, Mockito, MockMvc, RestTestClient, Testcontainers with @ServiceConnection, relation and status-endpoint integration tests, Podman |
 | `java-modern` | Java 21+ features: records, sealed classes, pattern matching, virtual threads |
 | `jpa-patterns` | JPA/Hibernate pitfalls (N+1, lazy loading), Hibernate 6/7, optimistic locking across HTTP requests, relation writes with OSIV off, schema drift |
@@ -132,7 +133,7 @@ The plugin enforces these rules via the `conventions` skill:
 
 The `cloud.md` reference covers:
 
-- Spring Cloud (Config Server, Eureka, Gateway, Resilience4j, LoadBalancer)
+- Spring Cloud (Config Server, Eureka, Gateway, LoadBalancer) and built-in `@Retryable`/`@ConcurrencyLimit`
 - Distributed tracing with OpenTelemetry (OTLP) and Micrometer Observation API
 - Virtual Threads, HTTP Interface Clients (`@HttpExchange`), GraalVM Native Image
 - Kubernetes: ConfigMap/Secret with `envFrom`, Prometheus annotations, startup/liveness/readiness probes, `preStop` hook, graceful shutdown
@@ -231,7 +232,11 @@ You can also invoke skills and agents directly:
 │   └── plugin.json
 ├── .codex-plugin/
 │   └── plugin.json
+├── .github/
+│   ├── scripts/validate.sh
+│   └── workflows/publish-skills.yml
 ├── agents/
+│   ├── architect.md
 │   ├── code-reviewer.md
 │   ├── devops-engineer.md
 │   ├── docker-expert.md
@@ -262,6 +267,7 @@ You can also invoke skills and agents directly:
 │   ├── java-modern/SKILL.md
 │   ├── jpa-patterns/SKILL.md
 │   ├── logging-patterns/SKILL.md
+│   ├── review-triage/SKILL.md
 │   ├── spring-boot/
 │   │   ├── SKILL.md
 │   │   └── references/
@@ -276,6 +282,17 @@ You can also invoke skills and agents directly:
 ├── README.md
 └── LICENSE
 ```
+
+## Releases
+
+Pushing a tag without a prefix, for example `1.3.2`, runs `.github/workflows/publish-skills.yml`. It checks the frontmatter of skills and agents and that the tag equals the version in both `plugin.json` files and in the README title, packs `skills/` and `agents/` into `skills.tar.gz`, pushes it as an OCI artifact to `quay.io/pminkows/claude-ai-spring-boot:<tag>` and creates a GitHub release. The workflow needs the repository secrets `QUAY_USERNAME` and `QUAY_PASSWORD` (a Quay robot account with write access to the repository). Run `.github/scripts/validate.sh` locally to do the checks before tagging.
+
+```bash
+# bump the version in both plugin.json files and in the README title, then
+git tag 1.3.2 && git push origin 1.3.2
+```
+
+The artifact is what the [ai-software-factory](https://github.com/piomin/ai-software-factory) pipelines pull with `oras pull`.
 
 ## Blog Post
 
